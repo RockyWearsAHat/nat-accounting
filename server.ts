@@ -2,21 +2,21 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import express from "express";
 import * as vite from "vite";
-import { createApiApp } from "./backend/src/index.js";
+import { createApiApp } from "./backend/src/index.js"; // In prod we still transpile on the fly via tsx; could swap to built file if desired
 import fs from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function createServer() {
   const isProd = process.env.NODE_ENV === "production";
-  const root = path.resolve(__dirname, "frontend");
+  const frontendRoot = path.resolve(__dirname, "frontend");
 
   const app = await createApiApp();
 
   let viteServer: vite.ViteDevServer | undefined;
   if (!isProd) {
     viteServer = await vite.createServer({
-      root,
+      root: frontendRoot,
       server: { middlewareMode: true },
       appType: "custom",
     });
@@ -24,7 +24,7 @@ async function createServer() {
   } else {
     app.use((await import("compression")).default());
     app.use(
-      express.static(path.resolve(root, "dist/client"), { index: false })
+      express.static(path.resolve(__dirname, "dist/client"), { index: false })
     );
   }
 
@@ -35,17 +35,20 @@ async function createServer() {
       let render: (url: string) => Promise<{ html: string; head?: string }>;
       if (!isProd && viteServer) {
         // Always read fresh template in dev
-        template = fs.readFileSync(path.resolve(root, "index.html"), "utf-8");
+        template = fs.readFileSync(
+          path.resolve(frontendRoot, "index.html"),
+          "utf-8"
+        );
         template = await viteServer.transformIndexHtml(url, template);
         render = (await viteServer.ssrLoadModule("/src/entry-server.tsx"))
           .render;
       } else {
         template = fs.readFileSync(
-          path.resolve(root, "dist/client/index.html"),
+          path.resolve(__dirname, "dist/client/index.html"),
           "utf-8"
         );
-        render = (await import("./frontend/dist/server/entry-server.js"))
-          .render;
+        // @ts-ignore built file exists after build step
+        render = (await import("./dist/server/entry-server.js")).render;
       }
       const { html, head } = await render(url);
       const finalHtml = template

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import { http } from "../../lib/http";
 import { Link, useNavigate } from "react-router-dom";
 import styles from "./LoginForm.module.css";
 
@@ -21,13 +21,13 @@ export const LoginForm: React.FC<Props> = ({ onAuth }) => {
     e.preventDefault();
     setError(null);
     try {
-      const { data } = await axios.post("/api/auth/login", { email, password });
+  const data = await http.post<any>("/api/auth/login", { email, password });
       if (data.ok) {
         onAuth(data.user);
         navigate(data.user.role === "admin" ? "/admin" : "/");
       } else setError("Login failed");
     } catch (err: any) {
-      setError(err.response?.data?.error || "Login failed");
+      setError(err.data?.error || "Login failed");
     }
   };
 

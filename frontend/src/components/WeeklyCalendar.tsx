@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import { http } from "../lib/http";
 import { CalendarEvent, CalendarConfig } from "../types/calendar";
 import { DayEventsModal } from "./DayEventsModal";
-import "./calendar.css";
+import styles from "./calendar.module.css";
 
 interface WeeklyCalendarProps {
   config: CalendarConfig | null;
@@ -52,6 +52,13 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       .toString(16)
       .slice(1)}`;
   }
+  // Format hour label (12h)
+  function formatHour(h:number){
+    if(h===0) return '12 AM';
+    if(h===12) return '12 PM';
+    if(h>12) return `${h-12} PM`;
+    return `${h} AM`;
+  }
 
   const [weekStart, setWeekStart] = useState(getWeekStart(new Date()));
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -62,7 +69,8 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   >(null);
   const [nowTick, setNowTick] = useState(Date.now());
 
-  // Update current time every minute
+  // (removed erroneous duplicate imports)
+
   useEffect(() => {
     const interval = setInterval(() => setNowTick(Date.now()), 60000);
     return () => clearInterval(interval);
@@ -91,7 +99,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
 
   // Load week events
   const loadWeek = async () => {
-    if (!config || loading) return;
+    if (loading) return; // allow fetch even before config
 
     setLoading(true);
     console.log(
@@ -104,13 +112,10 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
 
-      const { data } = await axios.get("/api/icloud/week", {
-        params: {
-          start: weekStart.toISOString().split("T")[0],
-          end: weekEnd.toISOString().split("T")[0],
-        },
+      const data = await http.get<any>("/api/merged/week", {
+        start: weekStart.toISOString().split("T")[0],
+        end: weekEnd.toISOString().split("T")[0],
       });
-
       console.log(`[WeeklyCalendar] Loaded ${data.events?.length || 0} events`);
       setEvents(data.events || []);
     } catch (error) {
@@ -125,10 +130,8 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const loadDay = async (date: Date) => {
     try {
       const dateStr = date.toISOString().split("T")[0];
-      const { data } = await axios.get("/api/icloud/day", {
-        params: { date: dateStr },
-      });
-      setSelectedDayEvents(data.events || []);
+  const data = await http.get<any>("/api/icloud/day", { date: dateStr });
+  setSelectedDayEvents(data.events || []);
     } catch (error) {
       console.error("[WeeklyCalendar] Error loading day events:", error);
       setSelectedDayEvents([]);
@@ -151,287 +154,257 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     setWeekStart(getWeekStart(date));
   };
 
+  // ----- Business hour window -----
+  let startHour = 0;
+  let endHour = 24;
+  if (hours) {
+    const vals = Object.values(hours).filter(Boolean) as any[];
+    if (vals.length) {
+      startHour = Math.floor(
+        Math.min(...vals.map((v) => v.startMinutes)) / 60
+      );
+      endHour = Math.ceil(
+        Math.max(...vals.map((v) => v.endMinutes)) / 60
+      );
+    }
+  }
+  const hourRange = Array.from({ length: endHour - startHour }, (_, i) =>
+    i + startHour
+  );
+
   // Process events for display
   const weekDates = getWeekDates(weekStart);
   const nowDate = new Date(nowTick);
+  const daySpanMinutes = Math.max(1, (endHour - startHour) * 60);
 
-  // Group events by day
-  const eventsByDay: Record<string, CalendarEvent[]> = {};
-  weekDates.forEach((date) => {
-    const dateKey = date.toISOString().split("T")[0];
-    eventsByDay[dateKey] = [];
+  const eventsByDay: Record<
+    string,
+    (CalendarEvent & { __top: number; __height: number; __lane: number; __baseColor?: string })[]
+  > = {};
+  const overlapSlices: Record<string, { top:number; height:number; colors:[string,string] }[]> = {};
+  weekDates.forEach((d) => {
+    eventsByDay[d.toISOString().split("T")[0]] = [];
   });
 
-  events.forEach((event) => {
-    const eventDate = new Date(event.start);
-    const dateKey = eventDate.toISOString().split("T")[0];
-    if (eventsByDay[dateKey]) {
-      eventsByDay[dateKey].push(event);
+  // Pre-filter events by config (after fetch) respecting busy calendars & forced busy events
+  const busySet = new Set(
+    (config?.calendars || []).filter((c) => c.busy).map((c) => c.url)
+  );
+  const forcedBusy = new Set(config?.busyEvents || []);
+  const relevantEvents = events.filter((ev) => {
+    if (!config) return true; // show until config loaded
+    return busySet.has(ev.calendarUrl) || (ev.uid && forcedBusy.has(ev.uid));
+  });
+
+  for (const ev of relevantEvents) {
+    const start = new Date(ev.start);
+    const end = ev.end
+      ? new Date(ev.end)
+      : new Date(start.getTime() + 30 * 60000);
+    const dateKey = start.toISOString().split("T")[0];
+    if (!(dateKey in eventsByDay)) continue;
+    const startMinutesFromDay = start.getHours() * 60 + start.getMinutes();
+    const endMinutesFromDay = end.getHours() * 60 + end.getMinutes();
+    const windowStartMinutes = startHour * 60;
+    const windowEndMinutes = endHour * 60;
+    const clampedStart = Math.max(startMinutesFromDay, windowStartMinutes);
+    const clampedEnd = Math.min(endMinutesFromDay, windowEndMinutes);
+    if (clampedEnd <= windowStartMinutes || clampedStart >= windowEndMinutes)
+      continue;
+    const relativeStart = clampedStart - windowStartMinutes;
+  const relativeDuration = Math.max(20, clampedEnd - clampedStart); // ensure readable block
+    // pre-compute base color similar to render logic for overlap striping
+    const calendarColor = config?.colors?.[ev.calendarUrl];
+    const baseColor = ev.color || calendarColor || "#3aa7e7";
+    (eventsByDay[dateKey] as any).push({
+      ...ev,
+      __top: relativeStart / daySpanMinutes,
+      __height: relativeDuration / daySpanMinutes,
+      __lane: 0,
+      __baseColor: baseColor
+    });
+  }
+
+  // Build overlap slices (only overlapping vertical segments, striped with both colors)
+  Object.keys(eventsByDay).forEach(key => {
+    const list = eventsByDay[key];
+  list.sort((a,b)=> new Date(a.start).getTime() - new Date(b.start).getTime());
+    overlapSlices[key] = [];
+    for (let i=0;i<list.length;i++){
+      const a = list[i];
+      const aStart = new Date(a.start).getTime();
+      const aEnd = new Date(a.end || a.start).getTime();
+      for (let j=i+1;j<list.length;j++){
+        const b = list[j];
+        const bStart = new Date(b.start).getTime();
+  if (bStart > aEnd) break; // allow touching endpoints to still break loop
+        const bEnd = new Date(b.end || b.start).getTime();
+  // treat slight adjacency (<=2 minutes gap) as overlap for stripe visibility
+  if (bStart < aEnd + 2*60000){
+          const overlapStart = Math.max(aStart,bStart);
+          const overlapEnd = Math.min(aEnd,bEnd);
+          if (overlapEnd > overlapStart){
+            const ovStartDate = new Date(overlapStart);
+            const ovEndDate = new Date(overlapEnd);
+            const startMinutesFromDay = ovStartDate.getHours()*60 + ovStartDate.getMinutes();
+            const endMinutesFromDay = ovEndDate.getHours()*60 + ovEndDate.getMinutes();
+            const windowStartMinutes = startHour*60;
+            const windowEndMinutes = endHour*60;
+            const cStart = Math.max(startMinutesFromDay, windowStartMinutes);
+            const cEnd = Math.min(endMinutesFromDay, windowEndMinutes);
+            if (cEnd > cStart){
+              const relTop = (cStart - windowStartMinutes) / daySpanMinutes;
+              const relHeight = (cEnd - cStart) / daySpanMinutes;
+              overlapSlices[key].push({
+                top: relTop,
+                height: relHeight,
+                colors: [a.__baseColor || '#3aa7e7', b.__baseColor || '#2ecc71']
+              });
+            }
+          }
+        }
+      }
     }
   });
 
   return (
-    <div className="weekly-calendar">
-      <h3 className="calendar-title">Calendar (Weekly View)</h3>
+    <div className={styles.weeklyCalendar}>
+      <h3 className={styles.calendarTitle}>Calendar (Weekly View)</h3>
 
-      {/* Week Navigation */}
-      <div className="calendar-nav">
-        <button className="nav-button" onClick={() => navigateWeek("prev")}>
-          ← Prev
-        </button>
-        <button className="nav-button" onClick={() => navigateWeek("next")}>
-          Next →
-        </button>
-        <div className="week-range">
-          {weekStart.toLocaleDateString()} -{" "}
-          {(() => {
-            const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekStart.getDate() + 6);
-            return weekEnd.toLocaleDateString();
-          })()}
+      <div className={styles.calendarNav}>
+        <button className={styles.navButton} onClick={() => navigateWeek("prev")}>Prev</button>
+        <button className={styles.navButton} onClick={() => navigateWeek("next")}>Next</button>
+        <div className={styles.weekRange}>
+          {weekStart.toLocaleDateString()} – {(() => { const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6); return weekEnd.toLocaleDateString(); })()}
         </div>
-        <button className="nav-button" onClick={goToCurrentWeek}>
-          This Week
-        </button>
-        <select
-          value={weekStart.getMonth()}
-          onChange={(e) => {
-            const month = parseInt(e.target.value, 10);
-            goToSpecificWeek(weekStart.getFullYear(), month + 1, 1);
-          }}
-          className="month-select"
-        >
-          {MONTH_NAMES.map((name, idx) => (
-            <option key={idx} value={idx}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          value={weekStart.getFullYear()}
-          onChange={(e) => {
-            const year =
-              parseInt(e.target.value, 10) || weekStart.getFullYear();
-            goToSpecificWeek(year, weekStart.getMonth() + 1, 1);
-          }}
-          className="year-input"
-        />
-        <button className="nav-button" onClick={loadWeek}>
-          🔄 Reload
-        </button>
+        <button className={styles.navButton} onClick={goToCurrentWeek}>This Week</button>
       </div>
 
-      {/* Loading State */}
-      {loading && (
-        <div className="calendar-loading">
-          <div>📅 Loading week events...</div>
-          <div className="loading-subtitle">
-            Please wait while we fetch your calendar data
-          </div>
-        </div>
-      )}
-
-      {/* No Events State */}
-      {!loading && events.length === 0 && (
-        <div className="calendar-empty">
-          <div>📭 No events found for this week</div>
-          <div className="empty-subtitle">
-            Make sure your calendars are marked as "busy" in the settings below
-          </div>
-        </div>
-      )}
-
-      {/* Calendar Grid */}
-      {!loading && (
-        <div className="calendar-grid">
-          {/* Time column header */}
-          <div className="time-header">Time</div>
-
-          {/* Day headers */}
-          {weekDates.map((date, dayIndex) => {
-            const isToday =
-              date.getFullYear() === nowDate.getFullYear() &&
-              date.getMonth() === nowDate.getMonth() &&
-              date.getDate() === nowDate.getDate();
-
-            return (
-              <div
-                key={dayIndex}
-                className={`day-header ${isToday ? "today" : ""}`}
-                onClick={() => {
-                  setSelectedDay(date.getDate());
-                  loadDay(date);
-                }}
-              >
-                <div className="day-weekday">
-                  {date.toLocaleDateString(undefined, { weekday: "short" })}
-                </div>
-                <div className="day-number">{date.getDate()}</div>
-                <div className="day-month">
-                  {date.toLocaleDateString(undefined, { month: "short" })}
-                </div>
+      {/* Grid headers */}
+      <div className={styles.dayHeaderRow}>
+        <div className={styles.timeHeader}>Time</div>
+        {weekDates.map((date, idx) => {
+          const isToday = date.toDateString() === nowDate.toDateString();
+          return (
+            <div
+              key={idx}
+              className={`${styles.dayHeader} ${isToday ? styles.today : ""}`}
+              onClick={() => {
+                setSelectedDay(date.getDate());
+                loadDay(date);
+              }}
+            >
+              <div className={styles.dayWeekday}>
+                {date.toLocaleDateString(undefined, { weekday: "short" })}
               </div>
-            );
-          })}
+              <div className={styles.dayNumber}>{date.getDate()}</div>
+              <div className={styles.dayMonth}>
+                {date.toLocaleDateString(undefined, { month: "short" })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-          {/* Time slots and events */}
-          {Array.from({ length: 24 }, (_, hour) => {
-            return (
-              <React.Fragment key={hour}>
-                {/* Time label */}
-                <div className="time-slot">
-                  {hour === 0
-                    ? "12 AM"
-                    : hour === 12
-                    ? "12 PM"
-                    : hour > 12
-                    ? `${hour - 12} PM`
-                    : `${hour} AM`}
-                </div>
-
-                {/* Day columns for this hour */}
-                {weekDates.map((date, dayIndex) => {
-                  const dateKey = date.toISOString().split("T")[0];
-                  const dayEvents = eventsByDay[dateKey] || [];
-
-                  // Get events that START in this hour
-                  const hourEvents = dayEvents.filter((event) => {
-                    const eventStart = new Date(event.start);
-                    return eventStart.getHours() === hour;
-                  });
-
-                  // Apply filtering based on calendar settings
-                  const filteredEvents = config
-                    ? hourEvents.filter((ev) => {
-                        const busySet = new Set(
-                          config.calendars
-                            .filter((c) => c.busy)
-                            .map((c) => c.url)
-                        );
-                        return (
-                          busySet.has(ev.calendarUrl) ||
-                          (ev.uid && (config.busyEvents || []).includes(ev.uid))
-                        );
-                      })
-                    : hourEvents;
-
-                  const isToday =
-                    date.getFullYear() === nowDate.getFullYear() &&
-                    date.getMonth() === nowDate.getMonth() &&
-                    date.getDate() === nowDate.getDate();
-
-                  const isCurrentHour = isToday && nowDate.getHours() === hour;
-
+      {/* Body */}
+  <div className={styles.calendarBody} style={{ minHeight: `calc(var(--hour-height) * ${Math.max(hourRange.length,10)})` }}>
+        {/* Time column with hour + half-hour labels */}
+        <div className={styles.timeCol}>
+          <div className={styles.timeScale} style={{height:`100%`}}>
+            {hourRange.map(h => {
+              const pctBase = ((h-startHour)*60) / daySpanMinutes * 100;
+              return <div key={'h'+h} className={styles.timeLabelHour} style={{top: `${pctBase}%`}}>{formatHour(h)}</div>;
+            })}
+            {hourRange.map(h => {
+              const pctHalf = (((h-startHour)*60)+30) / daySpanMinutes * 100;
+              return <div key={'m'+h} className={styles.timeLabelHalf} style={{top: `${pctHalf}%`}}>{`${(h%12===0?12: (h%12))}:30`}</div>;
+            })}
+          </div>
+        </div>
+        {/* Day columns */}
+        {weekDates.map((date, idx) => {
+          const dateKey = date.toISOString().split("T")[0];
+          const dayList = eventsByDay[dateKey] || [];
+          const stripes = overlapSlices[dateKey] || [];
+          const isToday = date.toDateString() === nowDate.toDateString();
+          return (
+            <div key={idx} className={`${styles.dayColumn} ${isToday ? styles.todayColumn : ""}`}>
+              {hourRange.map((h) => (
+                <div key={h} className={styles.hourRow} />
+              ))}
+              <div className={styles.eventsLayer}>
+                {stripes.map((s,i)=>(
+                  <div key={i} className={styles.overlapStripe} style={{
+                    top: `${(s.top*100).toFixed(4)}%`,
+                    height: `${(s.height*100).toFixed(4)}%`,
+                    background: `repeating-linear-gradient(135deg, ${s.colors[0]} 0 12px, ${s.colors[1]} 12px 24px)`
+                  }} />
+                ))}
+                {dayList.map((ev, i) => {
+                  const startDate = new Date(ev.start);
+                  const endDate = ev.end
+                    ? new Date(ev.end)
+                    : new Date(startDate.getTime() + 30 * 60000);
+                  const isOngoing =
+                    nowTick >= startDate.getTime() && nowTick < endDate.getTime();
+                  const whitelisted = ev.uid && config?.whitelist.includes(ev.uid);
+                  const baseColor = ev.__baseColor || ev.color || config?.colors?.[ev.calendarUrl] || "#3aa7e7";
+                  const bg =
+                    ev.blocking && !whitelisted
+                      ? baseColor
+                      : shadeColor(baseColor, -30);
+                  // base gradient only (stripes rendered separately for exact overlap slice)
+                  const backgroundStyle = `linear-gradient(145deg, ${bg}, ${shadeColor(bg,-18)})`;
                   return (
                     <div
-                      key={`${dayIndex}-${hour}`}
-                      className={`hour-cell ${
-                        isCurrentHour ? "current-hour" : ""
-                      }`}
+                      key={i}
+                      className={`${styles.calendarEvent} ${isOngoing ? styles.ongoing : ""}`}
+                      style={{
+                        top: `${(ev.__top * 100).toFixed(4)}%`,
+                        height: `${(ev.__height * 100).toFixed(4)}%`,
+                        left: 0,
+                        width: '100%',
+                        background: backgroundStyle,
+                        borderLeftColor: shadeColor(bg, 15),
+                      }}
+                      title={`${ev.summary}\n${startDate.toLocaleTimeString()} - ${endDate.toLocaleTimeString()}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDay(date.getDate());
+                        loadDay(date);
+                      }}
                     >
-                      {filteredEvents.map((event, eventIndex) => {
-                        const eventStart = new Date(event.start);
-                        const eventEnd = event.end
-                          ? new Date(event.end)
-                          : new Date(eventStart.getTime() + 30 * 60000);
-
-                        const startMinutes = eventStart.getMinutes();
-                        const durationMinutes =
-                          (eventEnd.getTime() - eventStart.getTime()) /
-                          (1000 * 60);
-
-                        const topPercent = (startMinutes / 60) * 100;
-                        const heightPercent = Math.max(
-                          20,
-                          (durationMinutes / 60) * 100
-                        );
-
-                        const whitelisted =
-                          event.uid && config?.whitelist.includes(event.uid);
-                        const isOngoing =
-                          nowTick >= eventStart.getTime() &&
-                          nowTick < eventEnd.getTime();
-                        const baseColor =
-                          event.color ||
-                          config?.colors?.[event.calendarUrl] ||
-                          "#444";
-                        const color =
-                          event.blocking && !whitelisted
-                            ? baseColor
-                            : shadeColor(baseColor, -35);
-
-                        return (
-                          <div
-                            key={eventIndex}
-                            className={`calendar-event ${
-                              isOngoing ? "ongoing" : ""
-                            }`}
-                            style={{
-                              top: `${topPercent}%`,
-                              height: `${heightPercent}%`,
-                              background: `linear-gradient(145deg, ${color}, ${shadeColor(
-                                color,
-                                -15
-                              )})`,
-                              borderLeftColor: shadeColor(color, 20),
-                            }}
-                            title={`${
-                              event.summary
-                            }\n${eventStart.toLocaleTimeString()} - ${eventEnd.toLocaleTimeString()}\nDuration: ${Math.round(
-                              durationMinutes
-                            )}min`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDay(date.getDate());
-                              loadDay(date);
-                            }}
-                          >
-                            <div className="event-time">
-                              {eventStart.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                              {heightPercent > 80 && (
-                                <span className="event-end-time">
-                                  {" "}
-                                  –{" "}
-                                  {eventEnd.toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                              )}
-                            </div>
-                            <div className="event-title">{event.summary}</div>
-                            {heightPercent > 60 && durationMinutes > 60 && (
-                              <div className="event-duration">
-                                {Math.round(durationMinutes)}min
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {/* Current time indicator */}
-                      {isCurrentHour && (
-                        <div
-                          className="current-time-indicator"
-                          style={{
-                            top: `${(nowDate.getMinutes() / 60) * 100}%`,
-                          }}
-                        />
-                      )}
+                      <div className={styles.eventContent}>
+                        <div className={styles.eventTime}>
+                          {startDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
+                          {" – "}
+                          {endDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
+                        </div>
+                        <div className={styles.eventTitle} title={ev.summary}>{ev.summary}</div>
+                      </div>
                     </div>
                   );
                 })}
-              </React.Fragment>
-            );
-          })}
-        </div>
-      )}
+                {isToday && (
+                  <div
+                    className={styles.currentTimeIndicator}
+                    style={{
+                      top: `${
+                        ((nowDate.getHours() * 60 + nowDate.getMinutes()) -
+                          startHour * 60) /
+                        daySpanMinutes *
+                        100
+                      }%`,
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-      {/* Day Events Modal */}
+      {/* Modal */}
       {selectedDay && selectedDayEvents && (
         <DayEventsModal
           day={selectedDay}

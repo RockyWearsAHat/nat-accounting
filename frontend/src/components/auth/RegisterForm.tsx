@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import { http } from "../../lib/http";
 import { Link, useNavigate } from "react-router-dom";
 import styles from "./RegisterForm.module.css";
 
@@ -23,14 +23,14 @@ export const RegisterForm: React.FC<Props> = ({ onAuth }) => {
     e.preventDefault();
     setError(null);
     try {
-      const { data } = await axios.post("/api/auth/register", {
+      const data = await http.post<any>("/api/auth/register", {
         email,
         password,
         company: company || undefined,
         website: website || undefined,
       });
       if (data.id) {
-        const { data: loginData } = await axios.post("/api/auth/login", {
+        const loginData = await http.post<any>("/api/auth/login", {
           email,
           password,
         });
@@ -40,7 +40,7 @@ export const RegisterForm: React.FC<Props> = ({ onAuth }) => {
         }
       } else setError("Registration failed");
     } catch (err: any) {
-      setError(err.response?.data?.error || "Registration failed");
+      setError(err.data?.error || "Registration failed");
     }
   };
 

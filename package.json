@@ -3,15 +3,15 @@
   "private": true,
   "workspaces": [
     "frontend",
-    "backend",
-    "shared"
+    "backend"
   ],
   "scripts": {
     "dev": "vite",
     "dev:split": "npm run dev -w backend & npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
     "dev:frontend": "npm run dev -w frontend",
-    "build": "npm run build:frontend && npm run build:backend",
+    "clean": "rm -rf dist",
+    "build": "npm run clean && npm run build:frontend && npm run build:backend && node scripts/merge-dist.js",
     "build:frontend": "npm run build -w frontend",
     "build:backend": "npm run build -w backend",
     "serve": "NODE_ENV=production node server.ts"

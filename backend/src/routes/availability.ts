@@ -2,7 +2,7 @@ import { Router } from "express";
 import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
-import type { AvailabilitySlot } from "shared";
+import type { AvailabilitySlot } from "../types.js";
 import { listMeetings } from "../scheduling.js";
 
 const router = Router();
@@ -19,41 +19,105 @@ router.get("/", async (req, res) => {
   >;
   const weekday = date.format("dddd").toLowerCase();
   const hours = hoursRaw[weekday];
-  if (!hours) return res.json({ date: date.toISOString(), slots: [] });
-  const [startStr, endStr] = hours.split("-").map((s) => s.trim());
-  const parseTime = (t: string) =>
-    dayjs(date.format("YYYY-MM-DD ") + t.replace(/(am|pm)/i, " $1"));
-  // naive parse; improve later
-  let start = dayjs(date.format("YYYY-MM-DD") + "T09:00:00");
-  let end = dayjs(date.format("YYYY-MM-DD") + "T17:00:00");
-  if (/am|pm/i.test(startStr) && /am|pm/i.test(endStr)) {
-    // TODO: robust 12h parsing
-  }
+  if (!hours)
+    return res.json({
+      date: date.format("YYYY-MM-DD"),
+      slots: [],
+      openMinutes: null,
+      closeMinutes: null,
+    });
+  const toMinutes = (s: string): number | null => {
+    s = s.trim().toLowerCase();
+    const m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+    if (m) {
+      let h = parseInt(m[1], 10);
+      const min = m[2] ? parseInt(m[2], 10) : 0;
+      const period = m[3];
+      if (h === 12) h = 0; // 12am -> 0
+      if (period === "pm") h += 12;
+      return h * 60 + min;
+    }
+    const m24 = s.match(/^(\d{1,2})(?::(\d{2}))?$/);
+    if (m24) {
+      const h = parseInt(m24[1], 10);
+      const min = m24[2] ? parseInt(m24[2], 10) : 0;
+      if (h > 23 || min > 59) return null;
+      return h * 60 + min;
+    }
+    return null;
+  };
+  const parts = hours.split(/-/).map((p) => p.trim());
+  if (parts.length !== 2)
+    return res.json({
+      date: date.format("YYYY-MM-DD"),
+      slots: [],
+      openMinutes: null,
+      closeMinutes: null,
+    });
+  const openMinutes = toMinutes(parts[0]);
+  const closeMinutes = toMinutes(parts[1]);
+  if (openMinutes == null || closeMinutes == null)
+    return res.json({
+      date: date.format("YYYY-MM-DD"),
+      slots: [],
+      openMinutes: null,
+      closeMinutes: null,
+    });
+  let start = dayjs(date).startOf("day").add(openMinutes, "minute");
+  let end = dayjs(date).startOf("day").add(closeMinutes, "minute");
   const slots: AvailabilitySlot[] = [];
   const slotLengthMins = 30;
   const existing = await listMeetings();
+  // Fetch blocking iCloud events (if admin session connected) to mark conflicts.
+  let externalEvents: { start: string; end?: string }[] = [];
+  try {
+    const resp = await fetch(
+      `http://localhost:${
+        process.env.PORT || 3000
+      }/api/icloud/all?days=1&blockingOnly=1`,
+      {
+        headers: { cookie: req.headers.cookie || "" },
+      }
+    );
+    if (resp.ok) {
+      const json: any = await resp.json();
+      externalEvents = (json.events || []).map((e: any) => ({
+        start: e.start,
+        end: e.end,
+      }));
+    }
+  } catch {}
+
   while (
     start.add(slotLengthMins, "minute").isBefore(end) ||
     start.add(slotLengthMins, "minute").isSame(end)
   ) {
     const s = start;
     const e = start.add(slotLengthMins, "minute");
-    const overlap = existing.some(
-      (m) =>
-        m.status === "scheduled" &&
-        !(e.isSame(dayjs(m.start)) || e.isBefore(dayjs(m.start))) &&
-        !(s.isSame(dayjs(m.end)) || s.isAfter(dayjs(m.end))) &&
-        s.isBefore(dayjs(m.end)) &&
-        e.isAfter(dayjs(m.start))
-    );
+    const overlapInternal = existing.some((m) => {
+      if (m.status !== "scheduled") return false;
+      const ms = dayjs(m.start);
+      const me = dayjs(m.end);
+      return s.isBefore(me) && e.isAfter(ms);
+    });
+    const overlapExternal = externalEvents.some((ev) => {
+      const evStart = dayjs(ev.start);
+      const evEnd = dayjs(ev.end || ev.start);
+      return s.isBefore(evEnd) && e.isAfter(evStart);
+    });
     slots.push({
       start: s.toISOString(),
       end: e.toISOString(),
-      available: !overlap,
+      available: !(overlapInternal || overlapExternal),
     });
     start = e;
   }
-  res.json({ date: date.format("YYYY-MM-DD"), slots });
+  res.json({
+    date: date.format("YYYY-MM-DD"),
+    slots,
+    openMinutes,
+    closeMinutes,
+  });
 });
 
 export default router;

@@ -3,18 +3,15 @@
     "target": "ES2020",
     "module": "ES2020",
     "moduleResolution": "Node",
-  // rootDir removed to allow importing from shared workspace during build
-    "outDir": "dist",
+    // rootDir removed to allow importing from shared workspace during build
+    "outDir": "../dist/api",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
     "baseUrl": "./",
-    "paths": {
-      "shared": ["../shared/src/index.ts"],
-      "shared/*": ["../shared/src/*"]
-    }
+    "paths": {}
   },
-  "include": ["src", "../shared/src"],
+  "include": ["src"],
   "exclude": ["node_modules"]
 }

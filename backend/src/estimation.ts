@@ -1,8 +1,8 @@
-import {
+import type {
   ConsultationRequest,
   InternalEstimate,
   InternalEstimateServiceRange,
-} from "shared";
+} from "./types.js";
 
 export function buildEstimate(
   req: ConsultationRequest

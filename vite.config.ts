@@ -4,18 +4,15 @@ import path from "node:path";
 import expressPlugin from "./vite.express";
 
 export default defineConfig(({ command, mode }) => {
-  const isProd = mode === "production";
   return {
     root: path.resolve(__dirname, "frontend"),
     plugins: [react(), expressPlugin("../backend/src/index.ts")],
     server: {
-      port: 5173,
+      port: 4000,
     },
     build: {
-      outDir: "dist/client",
-      manifest: true,
-      rollupOptions: { input: "index.html" },
+      outDir: "../dist/client",
+      rollupOptions: { input: path.resolve(__dirname, "frontend/index.html") },
     },
-    ssr: { noExternal: [] },
   };
 });

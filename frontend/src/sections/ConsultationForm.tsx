@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import { http } from "../lib/http";
 
 interface FormState {
   name: string;
@@ -40,7 +40,7 @@ export const ConsultationForm: React.FC = () => {
     setSubmitting(true);
     setStatus(null);
     try {
-      const { data } = await axios.post("/api/consultations", form);
+  const data = await http.post<any>("/api/consultations", form);
       if (data.ok) {
         setStatus("Submitted. We will reach out soon.");
         setForm(initial);

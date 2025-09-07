@@ -4,7 +4,7 @@ import { z } from "zod";
 import { buildEstimate } from "../estimation.js";
 import { ConsultationModel } from "../mongo.js";
 import { randomUUID } from "crypto";
-import type { ConsultationRequest, ConsultationStored } from "shared";
+import type { ConsultationRequest, ConsultationStored } from "../types.js";
 
 const router = Router();
 
@@ -70,7 +70,8 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/admin", requireAuth, async (req, res) => {
-  // Optionally enforce role check in future: if (req.user?.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
+  if (req.user?.role !== "admin")
+    return res.status(403).json({ error: "forbidden" });
   let list: ConsultationStored[] = [];
   if (process.env.MONGODB_URI) {
     const docs = await ConsultationModel.find().sort({ createdAt: -1 }).lean();

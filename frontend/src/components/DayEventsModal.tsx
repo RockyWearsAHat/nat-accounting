@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import { http } from "../lib/http";
 import { CalendarEvent, CalendarConfig } from "../types/calendar";
 
 interface DayEventsModalProps {
@@ -31,7 +31,7 @@ export const DayEventsModal: React.FC<DayEventsModalProps> = ({
   const toggleWhitelist = async (uid: string) => {
     try {
       const isWhitelisted = config?.whitelist.includes(uid);
-      await axios.post("/api/icloud/whitelist", {
+  await http.post("/api/icloud/whitelist", {
         uid,
         action: isWhitelisted ? "remove" : "add",
       });
@@ -44,7 +44,7 @@ export const DayEventsModal: React.FC<DayEventsModalProps> = ({
   const toggleBusyEvent = async (uid: string) => {
     try {
       const isBusy = config?.busyEvents?.includes(uid);
-      await axios.post("/api/icloud/event-busy", {
+  await http.post("/api/icloud/event-busy", {
         uid,
         action: isBusy ? "remove" : "add",
       });

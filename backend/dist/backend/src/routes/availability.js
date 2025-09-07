@@ -26,10 +26,11 @@ router.get("/", async (req, res) => {
     const slots = [];
     const slotLengthMins = 30;
     const existing = await listMeetings();
-    while (start.add(slotLengthMins, "minute").isBefore(end) || start.add(slotLengthMins, "minute").isSame(end)) {
+    while (start.add(slotLengthMins, "minute").isBefore(end) ||
+        start.add(slotLengthMins, "minute").isSame(end)) {
         const s = start;
         const e = start.add(slotLengthMins, "minute");
-        const overlap = existing.some((m) => m.status === 'scheduled' &&
+        const overlap = existing.some((m) => m.status === "scheduled" &&
             !(e.isSame(dayjs(m.start)) || e.isBefore(dayjs(m.start))) &&
             !(s.isSame(dayjs(m.end)) || s.isAfter(dayjs(m.end))) &&
             s.isBefore(dayjs(m.end)) &&

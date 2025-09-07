@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { ScheduledMeeting } from "shared";
+import type { ScheduledMeeting } from "./types.js";
 import { MeetingModel } from "./models/Meeting.js";
 
 // In-memory store until DB persistence extended

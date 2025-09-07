@@ -7,7 +7,7 @@ import {
   listMeetings,
   cancelMeeting,
 } from "../scheduling.js";
-import type { ScheduleRequestBody } from "shared";
+import type { ScheduleRequestBody } from "../types.js";
 
 const router = Router();
 
