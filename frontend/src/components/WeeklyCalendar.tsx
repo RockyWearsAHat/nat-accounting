@@ -155,8 +155,8 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   };
 
   // ----- Business hour window -----
-  let startHour = 0;
-  let endHour = 24;
+  let startHour = 8;
+  let endHour = 18;
   if (hours) {
     const vals = Object.values(hours).filter(Boolean) as any[];
     if (vals.length) {
@@ -176,14 +176,35 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const weekDates = getWeekDates(weekStart);
   const nowDate = new Date(nowTick);
   const daySpanMinutes = Math.max(1, (endHour - startHour) * 60);
+  const minuteHeightFactor = 1 / daySpanMinutes; // percentage per minute
 
   const eventsByDay: Record<
     string,
-    (CalendarEvent & { __top: number; __height: number; __lane: number; __baseColor?: string })[]
+    (CalendarEvent & { __top: number; __height: number; __lane: number; __baseColor?: string; __startMinutes:number; __durationMinutes:number })[]
   > = {};
   const overlapSlices: Record<string, { top:number; height:number; colors:[string,string] }[]> = {};
-  weekDates.forEach((d) => {
-    eventsByDay[d.toISOString().split("T")[0]] = [];
+  // --- Timezone helpers ---
+  const activeTZ = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  function getTzParts(dateISO:string){
+    try {
+      const d = new Date(dateISO);
+      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: activeTZ, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false });
+      const parts = fmt.formatToParts(d);
+      const grab = (t:string)=> parts.find(p=>p.type===t)?.value || '00';
+      return {
+        year: grab('year'), month: grab('month'), day: grab('day'),
+        hour: parseInt(grab('hour'),10), minute: parseInt(grab('minute'),10)
+      };
+    } catch { return {year:'0000', month:'00', day:'00', hour:0, minute:0}; }
+  }
+  function dayKeyFromISO(dateISO:string){
+    const p = getTzParts(dateISO);
+    return `${p.year}-${p.month}-${p.day}`;
+  }
+  weekDates.forEach(d => {
+    // derive key in timezone so week boundaries align visually
+    const key = dayKeyFromISO(d.toISOString());
+    eventsByDay[key] = [];
   });
 
   // Pre-filter events by config (after fetch) respecting busy calendars & forced busy events
@@ -197,32 +218,29 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   });
 
   for (const ev of relevantEvents) {
-    const start = new Date(ev.start);
-    const end = ev.end
-      ? new Date(ev.end)
-      : new Date(start.getTime() + 30 * 60000);
-    const dateKey = start.toISOString().split("T")[0];
+    const startParts = getTzParts(ev.start);
+    const endParts = getTzParts(ev.end || ev.start);
+    const dateKey = dayKeyFromISO(ev.start);
     if (!(dateKey in eventsByDay)) continue;
-    const startMinutesFromDay = start.getHours() * 60 + start.getMinutes();
-    const endMinutesFromDay = end.getHours() * 60 + end.getMinutes();
+    const startMinutesFromDay = startParts.hour * 60 + startParts.minute;
+    const endMinutesFromDay = (endParts.hour * 60 + endParts.minute) || (startMinutesFromDay + 30);
     const windowStartMinutes = startHour * 60;
     const windowEndMinutes = endHour * 60;
-  const clampedStart = Math.max(startMinutesFromDay, windowStartMinutes);
-  const clampedEnd = Math.min(endMinutesFromDay, windowEndMinutes);
-    if (clampedEnd <= windowStartMinutes || clampedStart >= windowEndMinutes)
-      continue;
-  // Use exact minute offsets relative to window start for pixel-perfect alignment
-  const relativeStart = clampedStart - windowStartMinutes; // minutes
-  const relativeDuration = clampedEnd - clampedStart; // minutes
-    // pre-compute base color similar to render logic for overlap striping
+    const clampedStart = Math.max(startMinutesFromDay, windowStartMinutes);
+    const clampedEnd = Math.min(endMinutesFromDay, windowEndMinutes);
+    if (clampedEnd <= windowStartMinutes || clampedStart >= windowEndMinutes) continue;
+  const relativeStart = clampedStart - windowStartMinutes; // minutes from top window
+  const relativeDuration = clampedEnd - clampedStart; // minutes length
     const calendarColor = config?.colors?.[ev.calendarUrl];
-    const baseColor = ev.color || calendarColor || "#3aa7e7";
+    const baseColor = ev.color || calendarColor || '#3aa7e7';
     (eventsByDay[dateKey] as any).push({
       ...ev,
-  __top: relativeStart / daySpanMinutes,
-  __height: relativeDuration / daySpanMinutes,
+      __top: relativeStart / daySpanMinutes,
+      __height: relativeDuration / daySpanMinutes,
       __lane: 0,
-      __baseColor: baseColor
+      __baseColor: baseColor,
+      __startMinutes: relativeStart,
+      __durationMinutes: relativeDuration
     });
   }
 
@@ -311,17 +329,13 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   <div className={styles.calendarBody} style={{ minHeight: `calc(var(--hour-height) * ${Math.max(hourRange.length,10)})` }}>
         {/* Time column with hour + half-hour labels */}
         <div className={styles.timeCol}>
-          <div className={styles.timeScale} style={{height:`100%`}}>
-            {hourRange.map(h => {
-              const pctBase = ((h-startHour)*60) / daySpanMinutes * 100;
-              // Add a 1px downward offset to sit just below the hour line
-              return <div key={'h'+h} className={styles.timeLabelHour} style={{top: `calc(${pctBase}% + 1px)`}}>{formatHour(h)}</div>;
-            })}
-            {hourRange.map(h => {
-              const pctHalf = (((h-startHour)*60)+30) / daySpanMinutes * 100;
-              // Half-hour label centered between hour lines (no transform)
-              return <div key={'m'+h} className={styles.timeLabelHalf} style={{top: `calc(${pctHalf}% + 1px)`}}>{`${(h%12===0?12: (h%12))}:30`}</div>;
-            })}
+          <div className={styles.timeScale} style={{height:`calc(${hourRange.length} * var(--hour-height))`}}>
+            {hourRange.map(h => (
+              <div key={'h'+h} className={styles.timeLabelHour} style={{ top: `calc(${h-startHour} * var(--hour-height))` }}>{formatHour(h)}</div>
+            ))}
+            {hourRange.map(h => (
+              <div key={'m'+h} className={styles.timeLabelHalf} style={{ top: `calc((${h-startHour} * var(--hour-height)) + (var(--hour-height)/2))` }}>{`${(h%12===0?12:(h%12))}:30`}</div>
+            ))}
           </div>
         </div>
         {/* Day columns */}
@@ -345,9 +359,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                 ))}
                 {dayList.map((ev, i) => {
                   const startDate = new Date(ev.start);
-                  const endDate = ev.end
-                    ? new Date(ev.end)
-                    : new Date(startDate.getTime() + 30 * 60000);
+                  const endDate = ev.end ? new Date(ev.end) : new Date(startDate.getTime() + 30*60000);
                   const isOngoing =
                     nowTick >= startDate.getTime() && nowTick < endDate.getTime();
                   const whitelisted = ev.uid && config?.whitelist.includes(ev.uid);
@@ -356,16 +368,15 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                     ev.blocking && !whitelisted
                       ? baseColor
                       : shadeColor(baseColor, -30);
-                  // base gradient only (stripes rendered separately for exact overlap slice)
-                  const backgroundStyle = `linear-gradient(145deg, ${bg}, ${shadeColor(bg,-18)})`;
-                  const headerBg = shadeColor(baseColor, -40);
+                  const backgroundStyle = `linear-gradient(160deg, ${shadeColor(bg,-6)}, ${shadeColor(bg,-22)})`;
+                  const headerBg = shadeColor(baseColor, -45);
                   return (
                     <div
                       key={i}
                       className={`${styles.calendarEvent} ${isOngoing ? styles.ongoing : ""}`}
                       style={{
-                        top: `${(ev.__top * 100).toFixed(4)}%`,
-                        height: `${(ev.__height * 100).toFixed(4)}%`,
+                        top: `calc(${ev.__startMinutes} * (var(--hour-height) / 60))`,
+                        height: `calc(${ev.__durationMinutes} * (var(--hour-height) / 60))`,
                         left: 0,
                         width: '100%',
                         background: backgroundStyle,
@@ -379,11 +390,13 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                       }}
                     >
                       <div className={styles.eventContent}>
-                        <div style={{background: headerBg, padding:'2px 6px 3px', borderRadius:'4px 4px 3px 3px', fontSize:11, fontWeight:600, letterSpacing:'.03em', marginBottom:4, lineHeight:1.15}} title={ev.summary}>{ev.summary}</div>
-                        <div className={styles.eventTime} style={{fontWeight:600}}>
-                          {startDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
-                          {" – "}
-                          {endDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
+                        <div className={styles.eventHeader} style={{ background: headerBg }}>
+                          <div className={styles.eventTitle} title={ev.summary}>{ev.summary}</div>
+                          <div className={styles.eventTime}>
+                            {startDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
+                            {" – "}
+                            {endDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
+                          </div>
                         </div>
                       </div>
                     </div>

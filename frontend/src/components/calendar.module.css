@@ -21,40 +21,39 @@
 .dayHeaderRow { display:grid; grid-template-columns:110px repeat(7,1fr); margin-bottom:.35rem; }
 .calendarBody { --hour-height:70px; display:grid; grid-template-columns:110px repeat(7,1fr); position:relative; min-height:calc(var(--hour-height) * 8); border:1px solid #1b1b20; border-radius:12px; overflow:hidden; background:#0e0e11; width:100%; }
 .timeCol { background:#121216; border-right:1px solid #1e1e24; position:relative; font-variant-numeric: tabular-nums; }
-.timeCol::before { /* mirror grid lines for alignment */
+.timeCol::before { /* mirror grid lines for alignment (hour / half / 10-min) */
 	content:""; position:absolute; inset:0; pointer-events:none; background:
 		repeating-linear-gradient(to bottom, rgba(255,255,255,0.12) 0 1px, transparent 1px calc(var(--hour-height))),
 		repeating-linear-gradient(to bottom, rgba(255,255,255,0.07) 0 1px, transparent 1px calc(var(--hour-height)/2)),
-		repeating-linear-gradient(to bottom, rgba(255,255,255,0.04) 0 1px, transparent 1px calc(var(--hour-height)/12));
+		repeating-linear-gradient(to bottom, rgba(255,255,255,0.045) 0 1px, transparent 1px calc(var(--hour-height)/6));
 	opacity:.55;
 }
 .timeScale { position:relative; width:100%; height:100%; }
-.timeLabelHour, .timeLabelHalf { position:absolute; right:10px; font-size:11px; font-weight:600; color:#d9d9de; letter-spacing:.03em; pointer-events:none; line-height:1; /* removed translateY for direct line alignment */ }
+.timeLabelHour, .timeLabelHalf { position:absolute; right:10px; font-size:11px; font-weight:600; color:#d9d9de; letter-spacing:.03em; pointer-events:none; line-height:1; }
 .timeLabelHalf { font-weight:500; color:#9da1aa; }
 .timeLabelHalf { font-weight:400; font-size:10px; color:#888; }
 .dayColumn { position:relative; border-right:1px solid #1e1e24; }
 .dayColumn:last-child { border-right:none; }
-.hourRow { position:relative; height:var(--hour-height); border-bottom:1px solid #20232b; }
-.hourRow:last-child { border-bottom:1px solid #22242c; }
-.eventsLayer { position:absolute; top:0; bottom:0; left:0; right:0; padding:2px 3px 4px; z-index:1; }
-.overlapStripe { position:absolute; left:0; right:0; border-radius:4px; mix-blend-mode:normal; opacity:.75; pointer-events:none; background-size:24px 24px; z-index:3; }
-.dayColumn::before { /* 5-minute grid: heavy for hour, medium for 30, light for others */
+.hourRow { position:relative; height:var(--hour-height); }
+.eventsLayer { position:absolute; top:0; bottom:0; left:0; right:0; padding:0 3px 0 3px; z-index:1; }
+.overlapStripe { position:absolute; left:0; right:0; border-radius:4px; mix-blend-mode:normal; opacity:.75; pointer-events:none; background-size:24px 24px; z-index:3; box-sizing:border-box; }
+.dayColumn::before { /* 10-minute grid: strong hour, medium half, subtle 10-min */
 	content:""; position:absolute; inset:0; pointer-events:none;
 	background:
 		repeating-linear-gradient(
 			to bottom,
-			rgba(255,255,255,0.12) 0 1px, /* hour line */
+			rgba(255,255,255,0.12) 0 1px,
 			transparent 1px calc(var(--hour-height))
 		),
 		repeating-linear-gradient(
 			to bottom,
-			rgba(255,255,255,0.07) 0 1px, /* 30 min */
+			rgba(255,255,255,0.07) 0 1px,
 			transparent 1px calc(var(--hour-height)/2)
 		),
 		repeating-linear-gradient(
 			to bottom,
-			rgba(255,255,255,0.04) 0 1px, /* 5 min */
-			transparent 1px calc(var(--hour-height)/12)
+			rgba(255,255,255,0.045) 0 1px,
+			transparent 1px calc(var(--hour-height)/6)
 		);
 	opacity:.55;
 }
@@ -103,10 +102,12 @@
 .hourCell:last-child { border-right:none; }
 .currentHour { background:#1b2534; }
 
-.calendarEvent { position:absolute; border-radius:6px; border:1px solid rgba(255,255,255,.18); box-shadow:0 4px 10px -3px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.05) inset; font-size:10.5px; line-height:1.15; overflow:hidden; backdrop-filter:blur(3px); display:flex; align-items:stretch; cursor:pointer; min-height:26px; z-index:2; }
+.calendarEvent { position:absolute; border-radius:6px; border:1px solid rgba(255,255,255,.18); box-shadow:0 4px 10px -3px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.05) inset; font-size:10.5px; line-height:1.15; overflow:hidden; backdrop-filter:blur(3px); display:flex; align-items:stretch; cursor:pointer; min-height:26px; z-index:2; box-sizing:border-box; }
 .calendarEvent:hover { filter:brightness(1.06); }
 .calendarEvent.overlap::before { content:""; position:absolute; inset:0; background:repeating-linear-gradient(135deg,rgba(255,255,255,.28) 0 6px, rgba(255,255,255,0) 6px 12px); mix-blend-mode:overlay; opacity:.55; pointer-events:none; }
-.eventContent { position:relative; z-index:4; display:flex; flex-direction:column; gap:2px; width:100%; padding:3px 6px 4px; background:rgba(0,0,0,.28); color:#fdfdfd; text-shadow:0 1px 1px rgba(0,0,0,.6); justify-content:center; }
+.eventContent { position:relative; z-index:4; display:flex; flex-direction:column; gap:0; width:100%; height:100%; padding:0; background:transparent; color:#fdfdfd; text-shadow:0 1px 1px rgba(0,0,0,.6); }
+.eventHeader { display:flex; flex-direction:column; gap:2px; padding:4px 6px 5px; border-radius:6px; background:rgba(0,0,0,.4); height:100%; box-sizing:border-box; }
+.eventHeader .eventTime { font-weight:500; opacity:.95; font-size:10px; letter-spacing:.04em; }
 .eventContent .eventTitle { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .timeSlot { background:#101013; font-size:11px; padding:2px .35rem 0; height:var(--hour-height); display:flex; align-items:flex-start; justify-content:flex-end; border-right:1px solid #1c1c22; border-bottom:1px solid #22242c; font-weight:500; position:relative; }
 .timeSlot::after { content:""; position:absolute; left:0; right:0; top:0; bottom:0; background:
