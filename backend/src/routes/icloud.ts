@@ -202,13 +202,15 @@ router.get("/config", requireAdmin, async (req, res) => {
   try {
     const user = await User.findById((req as any).user?.id);
     if (user?.googleTokens?.refreshToken) {
+      // Ensure any legacy persisted accessToken field is removed
+      if ((user as any).googleTokens && (user as any).googleTokens.accessToken) {
+        delete (user as any).googleTokens.accessToken;
+        await user.save().catch(()=>{});
+      }
       const gClient = buildGoogleClient();
       gClient.setCredentials({
         refresh_token: user.googleTokens.refreshToken,
-        access_token: user.googleTokens.accessToken,
-        expiry_date: user.googleTokens.expiryDate?.getTime(),
-        scope: user.googleTokens.scope,
-        token_type: user.googleTokens.tokenType,
+        // Access token omitted intentionally; googleapis library will fetch using refresh token
       });
       const cal = google.calendar({ version: "v3", auth: gClient });
       const gList = await cal.calendarList.list({ maxResults: 250 });
@@ -255,11 +257,7 @@ router.post("/config", requireAdmin, async (req, res) => {
     if (user?.googleTokens?.refreshToken) {
       const gClient = buildGoogleClient();
       gClient.setCredentials({
-        refresh_token: user.googleTokens.refreshToken,
-        access_token: user.googleTokens.accessToken,
-        expiry_date: user.googleTokens.expiryDate?.getTime(),
-        scope: user.googleTokens.scope,
-        token_type: user.googleTokens.tokenType,
+        refresh_token: user.googleTokens.refreshToken, // refresh-only; access token fetched on demand
       });
       const cal = google.calendar({ version: "v3", auth: gClient });
       const gList = await cal.calendarList.list({ maxResults: 250 });

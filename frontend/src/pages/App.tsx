@@ -12,6 +12,7 @@ import {
   Navigate,
   Link,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 
 interface User {
@@ -85,78 +86,89 @@ const Layout: React.FC<{
   user: User | null;
   children: React.ReactNode;
   onLogout: () => void;
-}> = ({ user, children, onLogout }) => (
-  <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-    <header style={{ padding: "2rem", borderBottom: "1px solid #222" }}>
-      <h1 style={{ margin: 0, fontWeight: 400, letterSpacing: "0.05em" }}>
-        NAT'S ACCOUNTING
-      </h1>
-    </header>
-    <nav
-      style={{
-        position: "absolute",
-        top: 12,
-        right: 16,
-        fontSize: 12,
-        display: "flex",
-        gap: 6,
-        alignItems: "center",
-      }}
-    >
-      <Link to="/" style={navLink}>
-        Home
-      </Link>
-      {!user && (
-        <>
-          <span>| </span>
-          <Link to="/login" style={navLink}>
-            Login
-          </Link>
-        </>
-      )}
-      {user && (
-        <>
-          <span style={{ opacity: 0.6 }}>
-            {user.email} ({user.role})
-          </span>
-          {user.role === "admin" && (
-            <>
-              <span>| </span>
-              <Link to="/admin" style={navLink}>
-                Admin
-              </Link>
-            </>
-          )}
-          <span>| </span>
-          <button onClick={onLogout} style={linkBtn}>
-            Logout
-          </button>
-        </>
-      )}
-    </nav>
-    <main
-      style={{
+}> = ({ user, children, onLogout }) => {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const mainMaxWidth = isAdminRoute ? undefined : 900;
+  const mainStyle: React.CSSProperties = isAdminRoute
+    ? {
         flex: 1,
         width: "100%",
-        maxWidth: 900,
+        margin: "0 auto",
+        padding: "2rem 0 3rem",
+        display: "flex",
+        justifyContent: "center",
+      }
+    : {
+        flex: 1,
+        width: "100%",
+        maxWidth: mainMaxWidth,
         margin: "0 auto",
         padding: "2rem",
-      }}
-    >
-      {children}
-    </main>
-    <footer
-      style={{
-        padding: "2rem",
-        borderTop: "1px solid #222",
-        fontSize: 12,
-        textAlign: "center",
-      }}
-    >
-      © {new Date().getFullYear()} Nat's Accounting. All rights reserved.
-    </footer>
-  </div>
-);
+      };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <header style={{ padding: "2rem", borderBottom: "1px solid #222" }}>
+        <h1 style={{ margin: 0, fontWeight: 400, letterSpacing: "0.05em" }}>
+          NAT'S ACCOUNTING
+        </h1>
+      </header>
+      <nav
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 16,
+          fontSize: 12,
+          display: "flex",
+          gap: 6,
+          alignItems: "center",
+        }}
+      >
+        <Link to="/" style={navLink}>
+          Home
+        </Link>
+        {!user && (
+          <>
+            <span>| </span>
+            <Link to="/login" style={navLink}>
+              Login
+            </Link>
+          </>
+        )}
+        {user && (
+          <>
+            <span style={{ opacity: 0.6 }}>
+              {user.email} ({user.role})
+            </span>
+            {user.role === "admin" && (
+              <>
+                <span>| </span>
+                <Link to="/admin" style={navLink}>
+                  Admin
+                </Link>
+              </>
+            )}
+            <span>| </span>
+            <button onClick={onLogout} style={linkBtn}>
+              Logout
+            </button>
+          </>
+        )}
+      </nav>
+      <main style={mainStyle}>{children}</main>
+      <footer
+        style={{
+          padding: "2rem",
+          borderTop: "1px solid #222",
+          fontSize: 12,
+          textAlign: "center",
+        }}
+      >
+        © {new Date().getFullYear()} Nat's Accounting. All rights reserved.
+      </footer>
+    </div>
+  );
+};
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);

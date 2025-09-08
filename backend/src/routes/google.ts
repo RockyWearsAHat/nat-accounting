@@ -36,8 +36,9 @@ router.post("/auth/callback", requireAdmin, async (req, res) => {
   const user = await User.findById((req as any).user!.id);
     if (!user) return res.status(404).json({ error: "user_not_found" });
     const existing: any = user.get("googleTokens") || {};
-    if (tokens.refresh_token) existing.refreshToken = tokens.refresh_token;
-    if (tokens.access_token) existing.accessToken = tokens.access_token;
+  if (tokens.refresh_token) existing.refreshToken = tokens.refresh_token;
+  // Do NOT persist access token (ephemeral); force removal if previously stored
+  if (existing.accessToken) delete existing.accessToken;
     if (tokens.expiry_date) existing.expiryDate = new Date(tokens.expiry_date);
     if (tokens.scope) existing.scope = tokens.scope;
     if (tokens.token_type) existing.tokenType = tokens.token_type;
@@ -62,8 +63,8 @@ router.get("/auth/callback", requireAdmin, async (req, res) => {
     const user = await User.findById((req as any).user!.id);
     if (!user) return res.status(404).send("User not found");
     const existing: any = user.get("googleTokens") || {};
-    if (tokens.refresh_token) existing.refreshToken = tokens.refresh_token;
-    if (tokens.access_token) existing.accessToken = tokens.access_token;
+  if (tokens.refresh_token) existing.refreshToken = tokens.refresh_token;
+  if (existing.accessToken) delete existing.accessToken;
     if (tokens.expiry_date) existing.expiryDate = new Date(tokens.expiry_date);
     if (tokens.scope) existing.scope = tokens.scope;
     if (tokens.token_type) existing.tokenType = tokens.token_type;
@@ -119,9 +120,6 @@ async function getAuthorizedClient(userId?: string) {
   const client = buildClient();
   const creds: any = {
     refresh_token: user.googleTokens.refreshToken,
-    access_token: user.googleTokens.accessToken,
-    expiry_date: user.googleTokens.expiryDate?.getTime(),
-    token_type: user.googleTokens.tokenType,
   };
   if (user.googleTokens.scope) creds.scope = user.googleTokens.scope;
   client.setCredentials(creds);

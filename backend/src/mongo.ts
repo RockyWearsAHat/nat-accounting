@@ -75,17 +75,4 @@ export const SiteSettingsModel =
   mongoose.models.SiteSettings ||
   mongoose.model("SiteSettings", SiteSettingsSchema);
 
-// Google OAuth credential storage (single-admin context)
-const GoogleTokensSchema = new mongoose.Schema({
-  refreshToken: { type: String, required: true },
-  accessToken: { type: String },
-  expiryDate: { type: Date },
-  scope: { type: String },
-  tokenType: { type: String },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
-
-export const GoogleTokensModel =
-  (mongoose.models as any).GoogleTokens ||
-  mongoose.model("GoogleTokens", GoogleTokensSchema);
+// Legacy GoogleTokens collection removed in favor of per-user embedded refresh token only.

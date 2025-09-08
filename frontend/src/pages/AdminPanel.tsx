@@ -73,7 +73,8 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
   const loadConfig = async()=>{ 
     try { 
       const data = await http.get<any>('/api/icloud/config');
-      setConfig({ calendars: data.calendars, whitelist: data.whitelist, busyEvents: data.busyEvents||[], colors: data.colors||{} }); 
+  const ordered = [...data.calendars.filter((c:any)=>c.busy), ...data.calendars.filter((c:any)=>!c.busy)];
+  setConfig({ calendars: ordered, whitelist: data.whitelist, busyEvents: data.busyEvents||[], colors: data.colors||{} }); 
     } catch(e){ console.error(e);} 
   };
   const loadSettings = async()=>{ try { const data = await http.get<any>('/api/settings'); setSettings(data.settings);} catch(e){ console.error(e);} };

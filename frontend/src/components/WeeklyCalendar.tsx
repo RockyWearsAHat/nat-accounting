@@ -207,19 +207,20 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     const endMinutesFromDay = end.getHours() * 60 + end.getMinutes();
     const windowStartMinutes = startHour * 60;
     const windowEndMinutes = endHour * 60;
-    const clampedStart = Math.max(startMinutesFromDay, windowStartMinutes);
-    const clampedEnd = Math.min(endMinutesFromDay, windowEndMinutes);
+  const clampedStart = Math.max(startMinutesFromDay, windowStartMinutes);
+  const clampedEnd = Math.min(endMinutesFromDay, windowEndMinutes);
     if (clampedEnd <= windowStartMinutes || clampedStart >= windowEndMinutes)
       continue;
-    const relativeStart = clampedStart - windowStartMinutes;
-  const relativeDuration = Math.max(20, clampedEnd - clampedStart); // ensure readable block
+  // Use exact minute offsets relative to window start for pixel-perfect alignment
+  const relativeStart = clampedStart - windowStartMinutes; // minutes
+  const relativeDuration = clampedEnd - clampedStart; // minutes
     // pre-compute base color similar to render logic for overlap striping
     const calendarColor = config?.colors?.[ev.calendarUrl];
     const baseColor = ev.color || calendarColor || "#3aa7e7";
     (eventsByDay[dateKey] as any).push({
       ...ev,
-      __top: relativeStart / daySpanMinutes,
-      __height: relativeDuration / daySpanMinutes,
+  __top: relativeStart / daySpanMinutes,
+  __height: relativeDuration / daySpanMinutes,
       __lane: 0,
       __baseColor: baseColor
     });
@@ -313,11 +314,13 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
           <div className={styles.timeScale} style={{height:`100%`}}>
             {hourRange.map(h => {
               const pctBase = ((h-startHour)*60) / daySpanMinutes * 100;
-              return <div key={'h'+h} className={styles.timeLabelHour} style={{top: `${pctBase}%`}}>{formatHour(h)}</div>;
+              // Add a 1px downward offset to sit just below the hour line
+              return <div key={'h'+h} className={styles.timeLabelHour} style={{top: `calc(${pctBase}% + 1px)`}}>{formatHour(h)}</div>;
             })}
             {hourRange.map(h => {
               const pctHalf = (((h-startHour)*60)+30) / daySpanMinutes * 100;
-              return <div key={'m'+h} className={styles.timeLabelHalf} style={{top: `${pctHalf}%`}}>{`${(h%12===0?12: (h%12))}:30`}</div>;
+              // Half-hour label centered between hour lines (no transform)
+              return <div key={'m'+h} className={styles.timeLabelHalf} style={{top: `calc(${pctHalf}% + 1px)`}}>{`${(h%12===0?12: (h%12))}:30`}</div>;
             })}
           </div>
         </div>
@@ -355,6 +358,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                       : shadeColor(baseColor, -30);
                   // base gradient only (stripes rendered separately for exact overlap slice)
                   const backgroundStyle = `linear-gradient(145deg, ${bg}, ${shadeColor(bg,-18)})`;
+                  const headerBg = shadeColor(baseColor, -40);
                   return (
                     <div
                       key={i}
@@ -375,12 +379,12 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                       }}
                     >
                       <div className={styles.eventContent}>
-                        <div className={styles.eventTime}>
+                        <div style={{background: headerBg, padding:'2px 6px 3px', borderRadius:'4px 4px 3px 3px', fontSize:11, fontWeight:600, letterSpacing:'.03em', marginBottom:4, lineHeight:1.15}} title={ev.summary}>{ev.summary}</div>
+                        <div className={styles.eventTime} style={{fontWeight:600}}>
                           {startDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
                           {" – "}
                           {endDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
                         </div>
-                        <div className={styles.eventTitle} title={ev.summary}>{ev.summary}</div>
                       </div>
                     </div>
                   );

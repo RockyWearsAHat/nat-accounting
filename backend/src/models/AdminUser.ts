@@ -2,8 +2,7 @@ import mongoose from "mongoose";
 
 const GoogleTokensSubSchema = new mongoose.Schema(
   {
-    refreshToken: { type: String },
-    accessToken: { type: String },
+  refreshToken: { type: String },
     expiryDate: { type: Date },
     scope: { type: String },
     tokenType: { type: String },
