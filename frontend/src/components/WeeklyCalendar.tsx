@@ -53,11 +53,11 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       .slice(1)}`;
   }
   // Format hour label (12h)
-  function formatHour(h:number){
-    if(h===0) return '12 AM';
-    if(h===12) return '12 PM';
-    if(h>12) return `${h-12} PM`;
-    return `${h} AM`;
+  function formatHour(h:number, isHalf = false){
+    if (isHalf) {
+      return h === 0 ? "12:30 AM" : h < 12 ? `${h}:30 AM` : h === 12 ? "12:30 PM" : `${h-12}:30 PM`;
+    }
+    return h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`;
   }
 
   const [weekStart, setWeekStart] = useState(getWeekStart(new Date()));
@@ -182,7 +182,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     string,
     (CalendarEvent & { __top: number; __height: number; __lane: number; __baseColor?: string; __startMinutes:number; __durationMinutes:number })[]
   > = {};
-  const overlapSlices: Record<string, { top:number; height:number; colors:[string,string] }[]> = {};
+  const overlapSlices: Record<string, { startMinutes:number; durationMinutes:number; colors:[string,string]; titles:[string,string]; label:string; topRounded:boolean; bottomRounded:boolean; aIndex:number; bIndex:number }[]> = {};
   // --- Timezone helpers ---
   const activeTZ = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   function getTzParts(dateISO:string){
@@ -214,6 +214,12 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const forcedBusy = new Set(config?.busyEvents || []);
   const relevantEvents = events.filter((ev) => {
     if (!config) return true; // show until config loaded
+    
+    // Filter out declined events
+    if (ev.responseStatus === 'declined' || ev.status === 'declined') {
+      return false;
+    }
+    
     return busySet.has(ev.calendarUrl) || (ev.uid && forcedBusy.has(ev.uid));
   });
 
@@ -247,41 +253,40 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   // Build overlap slices (only overlapping vertical segments, striped with both colors)
   Object.keys(eventsByDay).forEach(key => {
     const list = eventsByDay[key];
-  list.sort((a,b)=> new Date(a.start).getTime() - new Date(b.start).getTime());
+    list.sort((a,b)=> a.__startMinutes - b.__startMinutes);
     overlapSlices[key] = [];
-    for (let i=0;i<list.length;i++){
+    for (let i=0;i<list.length;i++) {
       const a = list[i];
-      const aStart = new Date(a.start).getTime();
-      const aEnd = new Date(a.end || a.start).getTime();
-      for (let j=i+1;j<list.length;j++){
+      const aStart = a.__startMinutes;
+      const aEnd = aStart + a.__durationMinutes;
+      for (let j=i+1;j<list.length;j++) {
         const b = list[j];
-        const bStart = new Date(b.start).getTime();
-  if (bStart > aEnd) break; // allow touching endpoints to still break loop
-        const bEnd = new Date(b.end || b.start).getTime();
-  // treat slight adjacency (<=2 minutes gap) as overlap for stripe visibility
-  if (bStart < aEnd + 2*60000){
-          const overlapStart = Math.max(aStart,bStart);
-          const overlapEnd = Math.min(aEnd,bEnd);
-          if (overlapEnd > overlapStart){
-            const ovStartDate = new Date(overlapStart);
-            const ovEndDate = new Date(overlapEnd);
-            const startMinutesFromDay = ovStartDate.getHours()*60 + ovStartDate.getMinutes();
-            const endMinutesFromDay = ovEndDate.getHours()*60 + ovEndDate.getMinutes();
-            const windowStartMinutes = startHour*60;
-            const windowEndMinutes = endHour*60;
-            const cStart = Math.max(startMinutesFromDay, windowStartMinutes);
-            const cEnd = Math.min(endMinutesFromDay, windowEndMinutes);
-            if (cEnd > cStart){
-              const relTop = (cStart - windowStartMinutes) / daySpanMinutes;
-              const relHeight = (cEnd - cStart) / daySpanMinutes;
-              overlapSlices[key].push({
-                top: relTop,
-                height: relHeight,
-                colors: [a.__baseColor || '#3aa7e7', b.__baseColor || '#2ecc71']
-              });
-            }
-          }
-        }
+        const bStart = b.__startMinutes;
+        if (bStart >= aEnd) break;
+        const bEnd = bStart + b.__durationMinutes;
+        const oStart = Math.max(aStart, bStart);
+        const oEnd = Math.min(aEnd, bEnd);
+        if (oEnd <= oStart) continue;
+        const duration = oEnd - oStart;
+        const aFull = oStart === aStart && oEnd === aEnd;
+        const bFull = oStart === bStart && oEnd === bEnd;
+        const labelCandidate = aFull && !bFull ? a.summary : bFull && !aFull ? b.summary : (a.__durationMinutes <= b.__durationMinutes ? a.summary : b.summary);
+        const topRounded = (aStart === oStart && bStart === oStart);
+        const bottomRounded = (aEnd === oEnd && bEnd === oEnd);
+        overlapSlices[key].push({
+          startMinutes: oStart,
+          durationMinutes: duration,
+          colors:[a.__baseColor || '#3aa7e7', b.__baseColor || '#2ecc71'],
+          titles:[a.summary, b.summary],
+            label: labelCandidate,
+            topRounded,
+            bottomRounded,
+            aIndex:i,
+            bIndex:j
+        });
+        // mark full overlap events so we can hide their internal content
+        if (aFull) (a as any).__fullOverlap = true;
+        if (bFull) (b as any).__fullOverlap = true;
       }
     }
   });
@@ -299,42 +304,30 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         <button className={styles.navButton} onClick={goToCurrentWeek}>This Week</button>
       </div>
 
+
       {/* Grid headers */}
+      {/* Week header */}
       <div className={styles.dayHeaderRow}>
         <div className={styles.timeHeader}>Time</div>
-        {weekDates.map((date, idx) => {
-          const isToday = date.toDateString() === nowDate.toDateString();
-          return (
-            <div
-              key={idx}
-              className={`${styles.dayHeader} ${isToday ? styles.today : ""}`}
-              onClick={() => {
-                setSelectedDay(date.getDate());
-                loadDay(date);
-              }}
-            >
-              <div className={styles.dayWeekday}>
-                {date.toLocaleDateString(undefined, { weekday: "short" })}
-              </div>
-              <div className={styles.dayNumber}>{date.getDate()}</div>
-              <div className={styles.dayMonth}>
-                {date.toLocaleDateString(undefined, { month: "short" })}
-              </div>
-            </div>
-          );
-        })}
+        {weekDates.map((date, idx) => (
+          <div key={idx} className={`${styles.dayHeader} ${date.toDateString() === nowDate.toDateString() ? styles.today : ""}`}>
+            <div className={styles.dayWeekday}>{date.toLocaleDateString("en-US", { weekday: "short" })}</div>
+            <div className={styles.dayNumber}>{date.getDate()}</div>
+            <div className={styles.dayMonth}>{date.toLocaleDateString("en-US", { month: "short" })}</div>
+          </div>
+        ))}
       </div>
-
       {/* Body */}
-  <div className={styles.calendarBody} style={{ minHeight: `calc(var(--hour-height) * ${Math.max(hourRange.length,10)})` }}>
-        {/* Time column with hour + half-hour labels */}
+      <div className={styles.calendarBody} style={{ minHeight: `calc(var(--hour-height) * ${Math.max(hourRange.length,10)})` }}>
+        <div className={styles.gridOverlay} />
+        {/* Time column */}
         <div className={styles.timeCol}>
           <div className={styles.timeScale} style={{height:`calc(${hourRange.length} * var(--hour-height))`}}>
             {hourRange.map(h => (
               <div key={'h'+h} className={styles.timeLabelHour} style={{ top: `calc(${h-startHour} * var(--hour-height))` }}>{formatHour(h)}</div>
             ))}
             {hourRange.map(h => (
-              <div key={'m'+h} className={styles.timeLabelHalf} style={{ top: `calc((${h-startHour} * var(--hour-height)) + (var(--hour-height)/2))` }}>{`${(h%12===0?12:(h%12))}:30`}</div>
+              <div key={'m'+h} className={styles.timeLabelHalf} style={{ top: `calc((${h-startHour} + 0.5) * var(--hour-height))` }}>{formatHour(h, true)}</div>
             ))}
           </div>
         </div>
@@ -346,17 +339,25 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
           const isToday = date.toDateString() === nowDate.toDateString();
           return (
             <div key={idx} className={`${styles.dayColumn} ${isToday ? styles.todayColumn : ""}`}>
-              {hourRange.map((h) => (
-                <div key={h} className={styles.hourRow} />
+              {hourRange.map(hour => (
+                <div key={hour} className={styles.hourRow} />
               ))}
               <div className={styles.eventsLayer}>
-                {stripes.map((s,i)=>(
-                  <div key={i} className={styles.overlapStripe} style={{
-                    top: `${(s.top*100).toFixed(4)}%`,
-                    height: `${(s.height*100).toFixed(4)}%`,
-                    background: `repeating-linear-gradient(135deg, ${s.colors[0]} 0 12px, ${s.colors[1]} 12px 24px)`
-                  }} />
-                ))}
+                {stripes.map((s,i)=>{
+                  const eventA = eventsByDay[dateKey][s.aIndex];
+                  const eventB = eventsByDay[dateKey][s.bIndex];
+                  const colorA = eventA.__baseColor || '#3aa7e7';
+                  const colorB = eventB.__baseColor || '#2ecc71';
+                  return (
+                    <div key={i} className={styles.overlapStripe + ' ' + (s.topRounded ? styles.ovTopRound : '') + ' ' + (s.bottomRounded ? styles.ovBottomRound : '')} style={{
+                      top: `calc(${s.startMinutes} * (var(--hour-height)/60))`,
+                      height: `calc(${s.durationMinutes} * (var(--hour-height)/60))`,
+                      background: `repeating-linear-gradient(135deg, ${colorA} 0 16px, ${colorB} 16px 32px)`
+                    }}>
+                      <div className={styles.overlapStripeLabel}>{s.label}</div>
+                    </div>
+                  )
+                })}
                 {dayList.map((ev, i) => {
                   const startDate = new Date(ev.start);
                   const endDate = ev.end ? new Date(ev.end) : new Date(startDate.getTime() + 30*60000);
@@ -370,10 +371,12 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                       : shadeColor(baseColor, -30);
                   const backgroundStyle = `linear-gradient(160deg, ${shadeColor(bg,-6)}, ${shadeColor(bg,-22)})`;
                   const headerBg = shadeColor(baseColor, -45);
+                  const small = ev.__durationMinutes < 20; // less than 20 minutes -> compressed styling
+                  const hideContent = (ev as any).__fullOverlap;
                   return (
                     <div
                       key={i}
-                      className={`${styles.calendarEvent} ${isOngoing ? styles.ongoing : ""}`}
+                      className={`${styles.calendarEvent} ${small ? styles.smallEvent : ""} ${isOngoing ? styles.ongoing : ""}`}
                       style={{
                         top: `calc(${ev.__startMinutes} * (var(--hour-height) / 60))`,
                         height: `calc(${ev.__durationMinutes} * (var(--hour-height) / 60))`,
@@ -389,32 +392,21 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                         loadDay(date);
                       }}
                     >
-                      <div className={styles.eventContent}>
-                        <div className={styles.eventHeader} style={{ background: headerBg }}>
-                          <div className={styles.eventTitle} title={ev.summary}>{ev.summary}</div>
-                          <div className={styles.eventTime}>
-                            {startDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
-                            {" – "}
-                            {endDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
+                      {!hideContent && (
+                        <div className={styles.eventContent}>
+                          <div className={styles.eventHeader} style={{ background: headerBg }}>
+                            <div className={styles.eventTitle} title={ev.summary}>{ev.summary}</div>
+                            <div className={styles.eventTime}>
+                              {startDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
+                              {" – "}
+                              {endDate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })}
-                {isToday && (
-                  <div
-                    className={styles.currentTimeIndicator}
-                    style={{
-                      top: `${
-                        ((nowDate.getHours() * 60 + nowDate.getMinutes()) -
-                          startHour * 60) /
-                        daySpanMinutes *
-                        100
-                      }%`,
-                    }}
-                  />
-                )}
               </div>
             </div>
           );

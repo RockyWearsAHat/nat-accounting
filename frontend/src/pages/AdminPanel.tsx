@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { http } from '../lib/http';
 import { WeeklyCalendar } from '../components/WeeklyCalendar';
 import styles from '../components/calendar.module.css';
+import { ScheduleAppointmentModal } from '../components/ScheduleAppointmentModal';
 
 interface User { email:string; role:string; }
 interface CalendarConfig { calendars:any[]; whitelist:string[]; busyEvents?:string[]; colors?:Record<string,string>; }
@@ -61,6 +62,7 @@ const CalendarSettings: React.FC<{ config:CalendarConfig|null; onBusyToggle:(url
 // Main Admin Panel ------------------------------------------------
 export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, onLogout }) => {
   const [consultations,setConsultations] = useState<any[]|null>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [config,setConfig] = useState<CalendarConfig|null>(null);
   const [settings,setSettings] = useState<{ timezone:string; businessName:string; businessHours:any }|null>(null);
   const [availableTimezones,setAvailableTimezones] = useState<any[]>([]);
@@ -112,6 +114,16 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
         <h2>Admin Dashboard</h2>
         <button onClick={onLogout} className={styles.btnSecondary}>Logout</button>
       </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+        <button className={styles.btnPrimary} onClick={() => setShowScheduleModal(true)}>
+          + Schedule Appointment
+        </button>
+      </div>
+      <ScheduleAppointmentModal
+        open={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        onScheduled={() => { loadConfig(); setShowScheduleModal(false); }}
+      />
       <ConsultationsList data={consultations} />
       <div className={styles.calendarWrapper}>
         <WeeklyCalendar config={config} hours={hours} timezone={settings?.timezone} onConfigRefresh={loadConfig} />

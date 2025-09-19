@@ -1,11 +1,13 @@
 import mongoose from "mongoose";
 
+
 interface ISiteSettings {
   timezone: string;
   businessName: string;
   businessHours: {
     [day: string]: { start: string; end: string; enabled: boolean };
   };
+  bufferMinutes?: number; // Minimum buffer between appointments in minutes
   updatedAt: Date;
 }
 
@@ -31,6 +33,10 @@ const siteSettingsSchema = new mongoose.Schema<ISiteSettings>({
       sunday: { start: "09:00", end: "17:00", enabled: false },
     },
   },
+  bufferMinutes: {
+    type: Number,
+    default: 0, // No buffer by default
+  },
   updatedAt: {
     type: Date,
     default: Date.now,
@@ -40,9 +46,8 @@ const siteSettingsSchema = new mongoose.Schema<ISiteSettings>({
 // Ensure only one settings document exists
 siteSettingsSchema.index({}, { unique: true, sparse: true });
 
-export const SiteSettingsModel = mongoose.model<ISiteSettings>(
-  "SiteSettings",
-  siteSettingsSchema
-);
+export const SiteSettingsModel =
+  mongoose.models.SiteSettings ||
+  mongoose.model<ISiteSettings>("SiteSettings", siteSettingsSchema);
 
 export type { ISiteSettings };

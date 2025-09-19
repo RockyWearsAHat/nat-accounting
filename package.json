@@ -17,8 +17,13 @@
     "serve": "NODE_ENV=production node server.ts"
   },
   "devDependencies": {
-    "tsx": "^4.7.0",
+    "@types/compression": "^1.7.5",
+    "@types/luxon": "^3.7.1",
     "compression": "^1.7.4",
-    "@types/compression": "^1.7.5"
+    "tsx": "^4.7.0"
+  },
+  "dependencies": {
+    "date-fns-tz": "^3.2.0",
+    "luxon": "^3.7.2"
   }
 }

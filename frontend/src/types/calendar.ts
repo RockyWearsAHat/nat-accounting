@@ -5,8 +5,10 @@ export interface CalendarEvent {
   uid?: string;
   calendar: string;
   calendarUrl: string;
-  blocking?: boolean;
+  blocking?: boolean; 
   color?: string;
+  status?: string;
+  responseStatus?: string;
 }
 
 export interface CalendarInfo {

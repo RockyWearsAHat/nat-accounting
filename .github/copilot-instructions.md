@@ -1,3 +1,33 @@
+## Calendar & Scheduling API (2024 Update)
+
+### ModernCalendar Component
+- A reusable React component for displaying and scheduling appointments.
+- Props:
+	- `events`: CalendarEvent[] — events to display
+	- `availableSlots`: { start: string, end: string }[] — available appointment slots
+	- `onSlotSelect(start, end)`: callback when a user/admin selects a slot
+	- `minTime`, `maxTime`, `slotDurationMinutes`, `timezone`: for customization
+- Use for both admin and client scheduling interfaces.
+
+### Scheduling API Endpoints
+- `GET /api/calendar/available-slots?date=YYYY-MM-DD&duration=MINUTES`
+	- Returns all available appointment slots for the given day and duration, ensuring no overlap with existing events.
+	- **All calendar feeds set as 'blocking' in the database (see `CalendarConfigModel.busyCalendars`) must be included in the calculation for available timeslots.** This includes both iCloud and Google calendars, as configured in the unified admin interface.
+	- The backend should aggregate busy intervals from all blocking calendars (using the merged events endpoint or direct fetch) and exclude any overlapping times from the available slots.
+- (Planned) `POST /api/calendar/schedule`
+	- Schedule a new appointment (admin only, checks for overlap and working hours)
+
+### Usage
+- Use the ModernCalendar component to display events and available slots.
+- Use the available-slots endpoint to fetch open times for any day/duration.
+- All scheduling logic is reusable and API-driven for future expansion.
+
+### Organization
+- All calendar logic is in `frontend/src/components/ModernCalendar.tsx` and `backend/src/routes/calendar.ts`.
+- Types in `frontend/src/types/calendar.ts`.
+- Unified calendar configuration (including which calendars are considered 'blocking') is stored in the database via `CalendarConfigModel` and managed in the admin interface. The backend must always use this config to determine which calendars to aggregate for busy/available slot calculations.
+
+---
 Website theme: Black and White, Modern, Minamilistic, Luxury looking
 
 This is how I want my website layout to be: [LINK]https://www.sagiagency.com/clutch/?utm_source=clutch.co&utm_medium=referral&utm_campaign=featured-listing-consulting-us
@@ -79,5 +109,15 @@ Premium (CFO Lite): Everything in Growth + forecasting + KPI dashboards + quarte
 
 Professionalize this site, make it clean, interesting, and very helpful to the end user and additionally me as the admin.
 
-TECH STACK:
-nodejs, typescript, vite, mongodb
+
+## Guidelines for All Code
+This codebase is a modern web application using React, TypeScript, Vite for the frontend, and Express with TypeScript for the backend. It is structured as a monorepo with shared types and utilities ideally it should be built and ready to deploy on netlify. All code should be written in TypeScript and modern ES module syntax.
+
+All components, styles, and API routes should be well written with DRY principles, in each request
+search for appropriate places to reuse code, and enable refactoring and modularity. In a large codebase like this it is key to keep things clean and maintainable, as well as memorable and clear. It is easy to lose track of this so ensure that you are always on your A game when composing, planning, and writing. Always think about the future and how this code will be used and expanded upon.
+
+Always answer every part of a request in full, I will guide you but use this document as your main guiding principles for how to complete requests, I will give you ideas but you must expand and elaborate upon them based upon the rules and relevant information in this document. Please keep this document updated as a documentation so reusable functions and components can be referenced in the future and items can easily be reused and are known about to be reused.
+
+Styling should be minimal, clean, professional, sleek, stylish, modern, and MOST IMPORTANTLY, good to use. A bad design makes it hard for users to do anything on the site, they don't know where to look, what to click, and they often will leave before we can even propose anything. A good design makes it easy for users to do what they need to do, important and key information large and in a place they will look, good choices that allow them to know what they can click. This makes using the site much easier, they can acomplish their goal quickly and easily. Always think about the user experience and how to make it as smooth and seamless as possible.
+
+Always plan your implementation with a clear todo list that addresses every aspect of my request, and then implement it in a clean and professional manner, you can ask for a reivew of the plan, but once a plan is in motion do not stop until the goal you understand is achieved. Always complete your entire todo list in full, do not leave anything out or a request half finished. Ensure that everything is done to the absolute best of your ability.
