@@ -152,16 +152,133 @@
 	color: #f1f3f4;
 	padding: 20px 24px 0;
 }
-.dayHeaderRow { display:grid; grid-template-columns:140px repeat(7,1fr); margin-bottom:0; background:#121216; border-bottom:1px solid #1e1e24; }
-.calendarBody { --hour-height:80px; display:grid; grid-template-columns:140px repeat(7,1fr); position:relative; min-height:calc(var(--hour-height) * 10); border:none; border-radius:0; overflow:hidden; background:#0e0e11; width:100%; }
-.timeCol { background:#121216; border-right:1px solid #1e1e24; position:relative; font-variant-numeric: tabular-nums; padding:0; display:flex; flex-direction:column; }
-.timeCol::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:0; }
-.timeScale { position:relative; width:100%; height:100%; display:flex; flex-direction:column; }
-.timeLabelHour, .timeLabelHalf { position:absolute; right:12px; font-size:12px; font-weight:600; color:#d1d5db; letter-spacing:-.01em; pointer-events:none; line-height:1; transform:translateY(-50%); }
-.timeLabelHalf { font-weight:500; color:#9ca3af; font-size:11px; }
-.dayColumn { position:relative; border-right:1px solid #1e1e24; background:#0e0e11; }
-.dayColumn:last-child { border-right:none; }
-.hourRow { position:relative; height:var(--hour-height); border-bottom:1px solid rgba(255,255,255,0.05); }
+.dayHeaderRow { display:grid; grid-template-columns:80px repeat(7,1fr); margin-bottom:0; background:#121216; border-bottom:1px solid #1e1e24; }
+.calendarBody {
+	--hour-height: 64px;
+	display: grid;
+	grid-template-columns: 80px repeat(7, 1fr);
+	position: relative;
+	min-height: calc(var(--hour-height) * 10);
+	border: none;
+	border-radius: 0;
+	overflow: hidden;
+	background: #0e0e11;
+	width: 100%;
+}
+.timeCol {
+	background: #121216;
+	border-right: 1px solid #1e1e24;
+	position: relative;
+	font-variant-numeric: tabular-nums;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	width: 80px;
+	min-width: 80px;
+	grid-column: 1 / 2;
+	z-index: 2;
+}
+/* Modal overlay and box for professional look */
+.modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: rgba(18, 18, 24, 0.92);
+	z-index: 9999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background 0.2s;
+}
+.day-modal, .schedule-modal {
+	background: #18181c;
+	border-radius: 18px;
+	box-shadow: 0 8px 40px 0 #000c, 0 1.5px 0 #23232a;
+	padding: 32px 32px 24px 32px;
+	min-width: 340px;
+	max-width: 96vw;
+	max-height: 90vh;
+	overflow-y: auto;
+	color: #fff;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	z-index: 10000;
+}
+.modal-content {
+	width: 100%;
+	min-width: 320px;
+	max-width: 600px;
+	margin: 0 auto;
+	padding: 0;
+	background: none;
+	color: inherit;
+	box-shadow: none;
+}
+.modal-header {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 18px;
+}
+.close-btn {
+	background: none;
+	border: none;
+	color: #fff;
+	font-size: 2rem;
+	cursor: pointer;
+	line-height: 1;
+	padding: 0 8px;
+	border-radius: 6px;
+	transition: background 0.15s;
+}
+.close-btn:hover {
+	background: #23232a;
+}
+.timeScale {
+	position: relative;
+	width: 100%;
+	height: 100%;
+}
+.timeLabelHour, .timeLabelHalf {
+	position: absolute;
+	right: 8px;
+	font-size: 12px;
+	font-weight: 600;
+	color: #d1d5db;
+	letter-spacing: -0.01em;
+	pointer-events: none;
+	line-height: 1;
+	transform: translateY(-50%);
+}
+.timeLabelHalf {
+	font-weight: 500;
+	color: #9ca3af;
+	font-size: 11px;
+}
+.dayColumn {
+	position: relative;
+	border-right: 1px solid #1e1e24;
+	background: #0e0e11;
+	min-width: 0;
+	flex: 1 1 0%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+.dayColumn:last-child {
+	border-right: none;
+}
+.hourRow {
+	position: relative;
+	height: var(--hour-height);
+	border-bottom: 1px solid rgba(255,255,255,0.05);
+	width: 100%;
+}
 .eventsLayer { position:absolute; top:0; bottom:0; left:0; right:0; padding:0 6px; z-index:1; }
 .overlapStripe { position:absolute; left:0; right:0; border-radius:0; mix-blend-mode:normal; opacity:1; pointer-events:none; background-size:32px 32px; z-index:3; box-sizing:border-box; display:flex; align-items:flex-start; flex-direction:column; margin:0 6px; }
 .overlapStripeLabel { background:#1f2937; color:#ffffff; font-size:12px; font-weight:600; letter-spacing:-.01em; padding:6px 10px; width:100%; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -212,8 +329,28 @@
 .hourCell:last-child { border-right:none; }
 .currentHour { background:#182432; }
 
-.calendarEvent { position:absolute; border-radius:6px; border:1px solid rgba(255,255,255,.12); box-shadow:0 2px 8px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset; font-size:12px; line-height:1.4; overflow:hidden; display:flex; align-items:stretch; cursor:pointer; z-index:2; box-sizing:border-box; margin:1px 2px; backdrop-filter:blur(4px); }
-.calendarEvent:hover { box-shadow:0 4px 12px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.1) inset; transform:translateY(-1px); }
+.calendarEvent {
+	position: absolute;
+	left: 2px;
+	right: 2px;
+	border-radius: 6px;
+	border: 1px solid rgba(255,255,255,.12);
+	box-shadow: 0 2px 8px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset;
+	font-size: 12px;
+	line-height: 1.4;
+	overflow: hidden;
+	display: flex;
+	align-items: stretch;
+	cursor: pointer;
+	z-index: 2;
+	box-sizing: border-box;
+	margin: 0;
+	backdrop-filter: blur(4px);
+}
+.calendarEvent:hover {
+	box-shadow: 0 4px 12px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.1) inset;
+	transform: translateY(-1px);
+}
 .calendarEvent.overlap::before { content:""; position:absolute; inset:0; background:repeating-linear-gradient(135deg,rgba(255,255,255,.15) 0 6px, rgba(255,255,255,0) 6px 12px); mix-blend-mode:overlay; opacity:.5; pointer-events:none; }
 .eventContent { position:relative; z-index:4; display:flex; flex-direction:column; gap:1px; width:100%; height:100%; padding:0; background:transparent; color:#ffffff; text-shadow:0 1px 2px rgba(0,0,0,.8); }
 .eventHeader { display:flex; flex-direction:column; gap:1px; padding:6px 8px; border-radius:5px; background:rgba(0,0,0,.2); height:100%; box-sizing:border-box; }

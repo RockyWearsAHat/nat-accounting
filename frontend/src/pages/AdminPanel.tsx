@@ -122,7 +122,14 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
       <ScheduleAppointmentModal
         open={showScheduleModal}
         onClose={() => setShowScheduleModal(false)}
-        onScheduled={() => { loadConfig(); setShowScheduleModal(false); }}
+        onScheduled={() => {
+          loadConfig();
+          setShowScheduleModal(false);
+          // Also trigger calendar refresh if possible
+          if (window.dispatchEvent) {
+            window.dispatchEvent(new CustomEvent('calendar-refresh'));
+          }
+        }}
       />
       <ConsultationsList data={consultations} />
       <div className={styles.calendarWrapper}>

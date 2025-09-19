@@ -111,6 +111,8 @@ Professionalize this site, make it clean, interesting, and very helpful to the e
 
 
 ## Guidelines for All Code
+Always prioritize addressing root causes of issues rather than quick fixes. Strive for clean, maintainable, and well-documented code that adheres to best practices. Do not half complete requests/responses, do not write comments to insert something later, you can note todos and things that need to be addressed, but always ensure that everything is done up to par is left half done or incomplete (e.g. //Paste rest of code here. "Here's my plan that aligns with exactly what you're asking, I don't need clarification, except to proceed" and then I say "proceed" or "yes" or "continue" and you go on a side tangent. "This will for sure fix it" when the actual BAD CODE is not addressed <- DO NOT DO THIS. Remember, my words first and foremost are the most important information for what I want. Remember that all bad code must be code first, meaning that there is always behavior that has been WRITTEN already if there are bugs or issues. Remember to complete requests). Ensure issues are addressed from their underlying cause -- not just symptoms, code must be well structured, maintainable, controllable with internal controls, and scalable.
+
 This codebase is a modern web application using React, TypeScript, Vite for the frontend, and Express with TypeScript for the backend. It is structured as a monorepo with shared types and utilities ideally it should be built and ready to deploy on netlify. All code should be written in TypeScript and modern ES module syntax.
 
 All components, styles, and API routes should be well written with DRY principles, in each request

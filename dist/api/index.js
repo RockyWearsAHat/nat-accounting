@@ -8,7 +8,10 @@ import scheduleRouter from "./routes/schedule.js";
 import authRouter from "./routes/auth.js";
 import calendarRouter from "./routes/calendar.js";
 import icloudRouter from "./routes/icloud.js";
+import googleRouter from "./routes/google.js";
+import mergedRouter from "./routes/merged.js";
 import hoursRouter from "./routes/hours.js";
+import settingsRouter from "./routes/settings.js";
 import cookieParser from "cookie-parser";
 export async function createApiApp() {
     await connect();
@@ -25,7 +28,10 @@ export async function createApiApp() {
     app.use("/api/schedule", scheduleRouter);
     app.use("/api/calendar", calendarRouter);
     app.use("/api/icloud", icloudRouter);
+    app.use("/api/google", googleRouter);
+    app.use("/api/merged", mergedRouter);
     app.use("/api/hours", hoursRouter);
+    app.use("/api/settings", settingsRouter);
     return app;
 }
 let _apiAppPromise = null;

@@ -1,14 +1,19 @@
+// Delete event by UID (admin only)
+// (Moved after router declaration)
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
+import { connect as connectMongo, CalendarConfigModel } from "../mongo.js";
+import { getCachedEvents, setCachedEvents, createCacheKey, } from "../cache.js";
+import { getSession, setSession, getCalendarsCache, setCalendarsCache } from "../icloudSession.js";
 // CalDAV (iCloud) via dav library. NOTE: Do NOT store credentials plaintext in production.
 // Use an app-specific password generated in Apple ID (Security > App-Specific Passwords).
 // 2FA Apple logins cannot be fully automated with normal password.
 // This is a demo-only minimal integration.
 // @ts-ignore - library lacks bundled types
 import { createDAVClient } from "tsdav";
-import { connect as connectMongo, CalendarConfigModel } from "../mongo.js";
-let session = null;
-let calendarsCache = [];
+import { google } from "googleapis";
+import { User } from "../models/User.js";
+// Using a lightweight custom ICS parser (handles folding + simple RRULE expansion)
 // Config: calendars considered for conflict & whitelisted / forced busy event UIDs
 const busyCalendarUrls = new Set(); // if empty we'll treat ALL calendars as busy by default until user sets
 const whitelistUIDs = new Set(); // events here NEVER block
@@ -76,6 +81,7 @@ function requireAdmin(req, res, next) {
     next();
 }
 async function initFromEnvIfPossible() {
+    const session = getSession();
     if (session)
         return;
     const appleId = process.env.APPLE_ID;
@@ -86,7 +92,7 @@ async function initFromEnvIfPossible() {
     }
     try {
         console.log("[icloud] Initializing session from environment variables...");
-        session = { appleId, appPassword };
+        setSession({ appleId, appPassword });
         const client = await createDAVClient({
             serverUrl: "https://caldav.icloud.com",
             credentials: { username: appleId, password: appPassword },
@@ -94,30 +100,32 @@ async function initFromEnvIfPossible() {
             defaultAccountType: "caldav",
         });
         const calendars = await client.fetchCalendars();
-        calendarsCache = calendars.map((c) => ({
+        setCalendarsCache(calendars.map((c) => ({
             displayName: c.displayName,
             url: c.url,
             raw: c,
-        }));
+        })));
         // Load persisted config before setting defaults
         await loadPersistedConfigIfNeeded();
         // Initialize busy set on first connect only if empty
-        if (busyCalendarUrls.size === 0) {
+        const calendarsCache = getCalendarsCache();
+        if (busyCalendarUrls.size === 0 && calendarsCache) {
             calendarsCache.forEach((c) => busyCalendarUrls.add(c.url));
             console.log("[icloud] No busy calendars configured, marking all as busy by default");
         }
-        console.log("[icloud] Session initialized from env; calendars:", calendarsCache.map((c) => c.displayName).join(", "));
+        console.log("[icloud] Session initialized from env; calendars:", calendarsCache ? calendarsCache.map((c) => c.displayName).join(", ") : "none");
     }
     catch (e) {
         console.warn("[icloud] Auto-init from env failed", e);
-        session = null;
+        setSession(null);
     }
 }
+// iCloud connect endpoint (admin only)
 router.post("/connect", requireAdmin, async (req, res) => {
     const { appleId, appPassword } = req.body || {};
     if (!appleId || !appPassword)
         return res.status(400).json({ error: "appleId_and_appPassword_required" });
-    session = { appleId, appPassword };
+    setSession({ appleId, appPassword });
     try {
         const client = await createDAVClient({
             serverUrl: "https://caldav.icloud.com",
@@ -126,13 +134,14 @@ router.post("/connect", requireAdmin, async (req, res) => {
             defaultAccountType: "caldav",
         });
         const calendars = await client.fetchCalendars();
-        calendarsCache = calendars.map((c) => ({
+        setCalendarsCache(calendars.map((c) => ({
             displayName: c.displayName,
             url: c.url,
             raw: c,
-        }));
+        })));
         // Initialize busy set on first connect only if empty
-        if (busyCalendarUrls.size === 0)
+        const calendarsCache = getCalendarsCache();
+        if (busyCalendarUrls.size === 0 && calendarsCache)
             calendarsCache.forEach((c) => busyCalendarUrls.add(c.url));
         res.json({ ok: true, calendars: calendarsCache });
     }
@@ -141,20 +150,26 @@ router.post("/connect", requireAdmin, async (req, res) => {
         res.status(500).json({ error: "icloud_connect_failed" });
     }
 });
-router.post("/select", requireAdmin, (req, res) => {
+// Set selected calendarHref for session (admin only)
+router.post("/select-calendar", requireAdmin, async (req, res) => {
+    const session = getSession();
     if (!session)
         return res.status(400).json({ error: "not_connected" });
     const { calendarHref } = req.body || {};
     if (!calendarHref)
         return res.status(400).json({ error: "calendarHref_required" });
     session.calendarHref = calendarHref;
+    setSession(session);
     res.json({ ok: true });
 });
 // Get / update config
-router.get("/config", requireAdmin, async (_req, res) => {
+router.get("/config", requireAdmin, async (req, res) => {
     await loadPersistedConfigIfNeeded();
+    let session = getSession();
     if (!session)
         await initFromEnvIfPossible();
+    session = getSession();
+    const calendarsCache = getCalendarsCache() || [];
     console.log("[icloud] Config request - session exists:", !!session);
     console.log("[icloud] Calendars cache:", calendarsCache.length);
     console.log("[icloud] Busy calendars:", Array.from(busyCalendarUrls).length);
@@ -163,6 +178,35 @@ router.get("/config", requireAdmin, async (_req, res) => {
         url: c.url,
         busy: busyCalendarUrls.has(c.url),
     }));
+    // Append Google calendars (if connected) for unified configuration
+    try {
+        const user = await User.findById(req.user?.id);
+        if (user?.googleTokens?.refreshToken) {
+            // Ensure any legacy persisted accessToken field is removed
+            if (user.googleTokens && user.googleTokens.accessToken) {
+                delete user.googleTokens.accessToken;
+                await user.save().catch(() => { });
+            }
+            const gClient = buildGoogleClient();
+            gClient.setCredentials({
+                refresh_token: user.googleTokens.refreshToken,
+                // Access token omitted intentionally; googleapis library will fetch using refresh token
+            });
+            const cal = google.calendar({ version: "v3", auth: gClient });
+            const gList = await cal.calendarList.list({ maxResults: 250 });
+            for (const c of gList.data.items || []) {
+                const url = `google://${c.id}`;
+                list.push({
+                    displayName: c.summary || c.id || "Google Calendar",
+                    url,
+                    busy: busyCalendarUrls.has(url) || busyCalendarUrls.size === 0, // follow initial default logic
+                });
+            }
+        }
+    }
+    catch (e) {
+        console.warn("[unified-config] google calendars fetch failed", e?.message || e);
+    }
     res.json({
         calendars: list,
         whitelist: Array.from(whitelistUIDs),
@@ -183,11 +227,35 @@ router.post("/config", requireAdmin, async (req, res) => {
             }
         }
     }
+    const calendarsCache = getCalendarsCache() || [];
     const list = calendarsCache.map((c) => ({
         displayName: c.displayName,
         url: c.url,
         busy: busyCalendarUrls.has(c.url),
     }));
+    // Append Google calendars for unified config just like GET
+    try {
+        const user = await User.findById(req.user?.id);
+        if (user?.googleTokens?.refreshToken) {
+            const gClient = buildGoogleClient();
+            gClient.setCredentials({
+                refresh_token: user.googleTokens.refreshToken, // refresh-only; access token fetched on demand
+            });
+            const cal = google.calendar({ version: "v3", auth: gClient });
+            const gList = await cal.calendarList.list({ maxResults: 250 });
+            for (const c of gList.data.items || []) {
+                const url = `google://${c.id}`;
+                list.push({
+                    displayName: c.summary || c.id || "Google Calendar",
+                    url,
+                    busy: busyCalendarUrls.has(url) || busyCalendarUrls.size === 0,
+                });
+            }
+        }
+    }
+    catch (e) {
+        console.warn("[unified-config:post] google calendars fetch failed", e?.message || e);
+    }
     await persistConfig();
     res.json({ ok: true, calendars: list, colors: calendarColors });
 });
@@ -226,8 +294,10 @@ router.post("/event-busy", requireAdmin, async (req, res) => {
     });
 });
 router.get("/today", requireAdmin, async (_req, res) => {
+    let session = getSession();
     if (!session)
         await initFromEnvIfPossible();
+    session = getSession();
     if (!session)
         return res.status(400).json({ error: "not_connected" });
     if (!session.calendarHref)
@@ -257,10 +327,13 @@ router.get("/today", requireAdmin, async (_req, res) => {
 // Aggregate events across all calendars for the next N days (default 7)
 // Month endpoint (year, month 1-12)
 router.get("/month", requireAdmin, async (req, res) => {
+    let session = getSession();
     if (!session)
         await initFromEnvIfPossible();
+    session = getSession();
     if (!session)
         return res.status(400).json({ error: "not_connected" });
+    const calendarsCache = getCalendarsCache() || [];
     const year = parseInt(String(req.query.year), 10);
     const month = parseInt(String(req.query.month), 10); // 1-12
     if (!year || !month || month < 1 || month > 12)
@@ -332,10 +405,13 @@ router.get("/month", requireAdmin, async (req, res) => {
 });
 // Week endpoint (start and end dates in YYYY-MM-DD format)
 router.get("/week", requireAdmin, async (req, res) => {
+    let session = getSession();
     if (!session)
         await initFromEnvIfPossible();
+    session = getSession();
     if (!session)
         return res.status(400).json({ error: "not_connected" });
+    const calendarsCache = getCalendarsCache() || [];
     const startStr = String(req.query.start || "").trim();
     const endStr = String(req.query.end || "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startStr) ||
@@ -350,6 +426,18 @@ router.get("/week", requireAdmin, async (req, res) => {
     console.log(`[icloud] Week request: ${startStr} to ${endStr}`);
     console.log(`[icloud] Session active:`, !!session);
     console.log(`[icloud] Available calendars:`, calendarsCache.length);
+    // Check cache first
+    const cacheKey = createCacheKey("icloud", "week", startStr, endStr);
+    const cachedEvents = await getCachedEvents(cacheKey);
+    if (cachedEvents) {
+        console.log(`[icloud] Returning cached week events: ${cachedEvents.length}`);
+        return res.json({
+            range: { start: from.toISOString(), end: to.toISOString() },
+            events: cachedEvents,
+            debug: debug ? { cached: true } : undefined,
+            cached: true,
+        });
+    }
     try {
         const { appleId, appPassword } = session;
         const client = await createDAVClient({
@@ -409,10 +497,13 @@ router.get("/week", requireAdmin, async (req, res) => {
         }
         allEvents.sort((a, b) => a.start.localeCompare(b.start));
         console.log(`[icloud] Week response: ${allEvents.length} total events`);
+        // Cache the results for 5 minutes
+        await setCachedEvents(cacheKey, allEvents, 300);
         res.json({
             range: { start: from.toISOString(), end: to.toISOString() },
             events: allEvents,
             debug: debug ? debugInfo : undefined,
+            cached: false,
         });
     }
     catch (e) {
@@ -422,13 +513,27 @@ router.get("/week", requireAdmin, async (req, res) => {
 });
 // Day view (include ALL events; do not hide non-busy calendar events so they can be forced busy)
 router.get("/day", requireAdmin, async (req, res) => {
+    let session = getSession();
     if (!session)
         await initFromEnvIfPossible();
+    session = getSession();
     if (!session)
         return res.status(400).json({ error: "not_connected" });
+    const calendarsCache = getCalendarsCache() || [];
     const dateStr = String(req.query.date || "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr))
         return res.status(400).json({ error: "invalid_date" });
+    // Check cache first
+    const cacheKey = createCacheKey("icloud", "day", dateStr);
+    const cachedEvents = await getCachedEvents(cacheKey);
+    if (cachedEvents) {
+        console.log(`[icloud] Returning cached day events: ${cachedEvents.length}`);
+        return res.json({
+            date: dateStr,
+            events: cachedEvents,
+            cached: true,
+        });
+    }
     const [y, m, d] = dateStr.split("-").map((n) => parseInt(n, 10));
     const from = new Date(y, m - 1, d, 0, 0, 0, 0);
     const to = new Date(from.getTime() + 86400000);
@@ -442,6 +547,7 @@ router.get("/day", requireAdmin, async (req, res) => {
         });
         const calendars = calendarsCache.length ? calendarsCache : [];
         const allEvents = [];
+        console.log(`[icloud] Fetching day events for ${dateStr} from ${calendars.length} calendars...`);
         for (const cal of calendars) {
             try {
                 const calendarObj = cal.raw || { url: cal.url };
@@ -459,13 +565,21 @@ router.get("/day", requireAdmin, async (req, res) => {
                     .map((ev) => addBlocking(ev));
                 // Do NOT filter here; include non-busy calendar events so user can force busy.
                 allEvents.push(...eventsRaw);
+                console.log(`[icloud] Calendar ${cal.displayName}: ${eventsRaw.length} events`);
             }
             catch (e) {
                 console.warn("Day fetch failed for", cal.url, e?.message || e);
             }
         }
         allEvents.sort((a, b) => a.start.localeCompare(b.start));
-        res.json({ date: dateStr, events: allEvents });
+        // Cache the results for 5 minutes
+        await setCachedEvents(cacheKey, allEvents, 300);
+        console.log(`[icloud] Day response: ${allEvents.length} total events (cached)`);
+        res.json({
+            date: dateStr,
+            events: allEvents,
+            cached: false,
+        });
     }
     catch (e) {
         console.error("iCloud day fetch error", e);
@@ -474,15 +588,34 @@ router.get("/day", requireAdmin, async (req, res) => {
 });
 // Aggregate events across all calendars for the next N days (default 7)
 router.get("/all", requireAdmin, async (req, res) => {
+    let session = getSession();
     if (!session)
         await initFromEnvIfPossible();
+    session = getSession();
     if (!session)
         return res.status(400).json({ error: "not_connected" });
+    const calendarsCache = getCalendarsCache() || [];
     const days = Math.min(31, parseInt(String(req.query.days || "7"), 10) || 7);
+    const blockingOnly = req.query.blockingOnly === "1";
+    const debug = req.query.debug === "1";
+    // Check cache first
+    const cacheKey = createCacheKey("icloud", "all", days.toString(), blockingOnly ? "blocking" : "all");
+    const cachedEvents = await getCachedEvents(cacheKey);
+    if (cachedEvents) {
+        const startWindow = new Date();
+        startWindow.setHours(0, 0, 0, 0);
+        const endWindow = new Date(startWindow.getTime() + days * 86400000);
+        console.log(`[icloud] Returning cached all events: ${cachedEvents.length}`);
+        return res.json({
+            range: { start: startWindow.toISOString(), end: endWindow.toISOString() },
+            events: cachedEvents,
+            debug: debug ? { cached: true } : undefined,
+            cached: true,
+        });
+    }
     const startWindow = new Date();
     startWindow.setHours(0, 0, 0, 0);
     const endWindow = new Date(startWindow.getTime() + days * 86400000);
-    const debug = req.query.debug === "1";
     try {
         const { appleId, appPassword } = session;
         const client = await createDAVClient({
@@ -494,6 +627,7 @@ router.get("/all", requireAdmin, async (req, res) => {
         const calendars = calendarsCache.length ? calendarsCache : [];
         const allEvents = [];
         const debugInfo = [];
+        console.log(`[icloud] Fetching all events for ${days} days from ${calendars.length} calendars...`);
         for (const cal of calendars) {
             try {
                 const calendarObj = cal.raw || { url: cal.url };
@@ -525,6 +659,7 @@ router.get("/all", requireAdmin, async (req, res) => {
                     return false;
                 });
                 allEvents.push(...events);
+                console.log(`[icloud] Calendar ${cal.displayName}: ${events.length} events after filtering`);
             }
             catch (e) {
                 console.warn("Calendar fetch failed for", cal.url, (e && e.message) || e);
@@ -536,13 +671,17 @@ router.get("/all", requireAdmin, async (req, res) => {
             }
         }
         let events = allEvents;
-        if (req.query.blockingOnly === "1")
+        if (blockingOnly)
             events = events.filter((e) => e.blocking);
         events.sort((a, b) => a.start.localeCompare(b.start));
+        // Cache the results for 5 minutes
+        await setCachedEvents(cacheKey, events, 300);
+        console.log(`[icloud] All response: ${events.length} total events (cached)`);
         res.json({
             range: { start: startWindow.toISOString(), end: endWindow.toISOString() },
             events,
             debug: debug ? debugInfo : undefined,
+            cached: false,
         });
     }
     catch (e) {
@@ -795,4 +934,63 @@ function parseDate(v) {
     }
     return new Date(v);
 }
+// Delete event by UID (admin only)
+router.post("/delete-event", requireAdmin, async (req, res) => {
+    const { uid } = req.body || {};
+    if (!uid)
+        return res.status(400).json({ error: "uid_required" });
+    let session = getSession();
+    if (!session)
+        await loadPersistedConfigIfNeeded();
+    session = getSession();
+    if (!session)
+        return res.status(400).json({ error: "not_connected" });
+    if (!session.calendarHref)
+        return res.status(400).json({ error: "no_calendar_selected" });
+    try {
+        // Use the calendarHref as the cache key
+        const cacheKey = createCacheKey(session.calendarHref);
+        const events = await getCachedEvents(cacheKey) || [];
+        const event = events.find((e) => e.uid === uid);
+        if (!event || !event.url)
+            return res.status(404).json({ error: "event_not_found" });
+        // Use CalDAV DELETE
+        const fetch = global.fetch || require("node-fetch");
+        const authHeader = session?.appleId && session?.appPassword
+            ? {
+                Authorization: "Basic " + Buffer.from(session.appleId + ":" + session.appPassword).toString("base64"),
+            }
+            : {};
+        const result = await fetch(event.url, {
+            method: "DELETE",
+            headers: {
+                ...(authHeader.Authorization ? { Authorization: authHeader.Authorization } : {}),
+            },
+        });
+        if (!result.ok) {
+            return res.status(500).json({ error: "delete_failed", status: result.status });
+        }
+        // Remove from cache
+        await setCachedEvents(cacheKey, events.filter((e) => e.uid !== uid));
+        return res.json({ ok: true });
+    }
+    catch (err) {
+        let message = 'Unknown error';
+        if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
+            message = err.message;
+        }
+        else if (typeof err === 'string') {
+            message = err;
+        }
+        return res.status(500).json({ error: 'Failed to delete iCloud event', details: message });
+    }
+});
 export default router;
+// --- Google helper (local minimal) ---
+function buildGoogleClient() {
+    const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = process.env;
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+        throw new Error("Missing Google OAuth env vars");
+    }
+    return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+}

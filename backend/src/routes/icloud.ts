@@ -1,3 +1,9 @@
+
+
+// Delete event by UID (admin only)
+// (Moved after router declaration)
+
+
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { connect as connectMongo, CalendarConfigModel } from "../mongo.js";
@@ -1021,6 +1027,55 @@ function parseDate(v: string) {
   }
   return new Date(v);
 }
+
+
+// Delete event by UID (admin only)
+router.post("/delete-event", requireAdmin, async (req, res) => {
+  const { uid } = req.body || {};
+  if (!uid) return res.status(400).json({ error: "uid_required" });
+  let session = getSession();
+  if (!session) await loadPersistedConfigIfNeeded();
+  session = getSession();
+  if (!session) return res.status(400).json({ error: "not_connected" });
+  if (!session.calendarHref)
+    return res.status(400).json({ error: "no_calendar_selected" });
+  try {
+    // Use the calendarHref as the cache key
+    const cacheKey = createCacheKey(session.calendarHref);
+    const events = await getCachedEvents(cacheKey) || [];
+    const event = events.find((e: any) => e.uid === uid);
+    if (!event || !event.url) return res.status(404).json({ error: "event_not_found" });
+    // Use CalDAV DELETE
+    const fetch = (global as any).fetch || require("node-fetch");
+    const authHeader =
+      session?.appleId && session?.appPassword
+        ? {
+            Authorization:
+              "Basic " + Buffer.from(session.appleId + ":" + session.appPassword).toString("base64"),
+          }
+        : {};
+    const result = await fetch(event.url, {
+      method: "DELETE",
+      headers: {
+        ...(authHeader.Authorization ? { Authorization: authHeader.Authorization } : {}),
+      } as Record<string, string>,
+    });
+    if (!result.ok) {
+      return res.status(500).json({ error: "delete_failed", status: result.status });
+    }
+    // Remove from cache
+    await setCachedEvents(cacheKey, events.filter((e: any) => e.uid !== uid));
+    return res.json({ ok: true });
+  } catch (err) {
+    let message = 'Unknown error';
+    if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
+      message = (err as any).message;
+    } else if (typeof err === 'string') {
+      message = err;
+    }
+    return res.status(500).json({ error: 'Failed to delete iCloud event', details: message });
+  }
+});
 
 export default router;
 

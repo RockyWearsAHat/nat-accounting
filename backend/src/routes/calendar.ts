@@ -121,16 +121,22 @@ router.post("/schedule", async (req, res) => {
         const result = await fetch(uploadUrl, {
           method: 'PUT',
           headers: {
-            'Authorization': authHeader.Authorization,
+            ...(authHeader.Authorization ? { 'Authorization': authHeader.Authorization } : {}),
             'Content-Type': 'text/calendar; charset=utf-8',
-          },
+          } as Record<string, string>,
           body: icsString,
         });
         console.log('[icloud][create] createObject result:', result);
         return res.json({ success: true, result });
       } catch (err) {
         console.error('[icloud][create] Error creating event:', err);
-        return res.status(500).json({ error: 'Failed to create iCloud event', details: err?.message || err });
+        let message = 'Unknown error';
+        if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
+          message = (err as any).message;
+        } else if (typeof err === 'string') {
+          message = err;
+        }
+        return res.status(500).json({ error: 'Failed to create iCloud event', details: message });
       }
     } else if (provider === "google") {
       // Google Calendar scheduling logic (assume implemented elsewhere)

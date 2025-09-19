@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { http } from "../lib/http";
 import { CalendarEvent, CalendarConfig } from "../types/calendar";
 import { DayEventsModal } from "./DayEventsModal";
+import { ScheduleAppointmentModal } from "./ScheduleAppointmentModal";
+import { EventModal } from "./EventModal";
 import styles from "./calendar.module.css";
 
 interface WeeklyCalendarProps {
@@ -64,9 +67,11 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [selectedDayEvents, setSelectedDayEvents] = useState<
-    CalendarEvent[] | null
-  >(null);
+  const [selectedDayEvents, setSelectedDayEvents] = useState<CalendarEvent[] | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [dayModalLoading, setDayModalLoading] = useState(false);
+  const [showQuickSchedule, setShowQuickSchedule] = useState(false);
+  const [quickScheduleDate, setQuickScheduleDate] = useState<Date | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
 
   // (removed erroneous duplicate imports)
@@ -76,9 +81,12 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Load events when week changes
+  // Load events when week changes or when a calendar-refresh event is fired
   useEffect(() => {
     loadWeek();
+    const handler = () => loadWeek();
+    window.addEventListener('calendar-refresh', handler);
+    return () => window.removeEventListener('calendar-refresh', handler);
   }, [weekStart]);
 
   // Month names for navigation
@@ -128,13 +136,16 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
 
   // Load day events
   const loadDay = async (date: Date) => {
+    setDayModalLoading(true);
     try {
       const dateStr = date.toISOString().split("T")[0];
-  const data = await http.get<any>("/api/icloud/day", { date: dateStr });
-  setSelectedDayEvents(data.events || []);
+      const data = await http.get<any>("/api/icloud/day", { date: dateStr });
+      setSelectedDayEvents(data.events || []);
     } catch (error) {
       console.error("[WeeklyCalendar] Error loading day events:", error);
       setSelectedDayEvents([]);
+    } finally {
+      setDayModalLoading(false);
     }
   };
 
@@ -291,6 +302,8 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     }
   });
 
+  // Debug: log modal state on every render
+  // (removed)
   return (
     <div className={styles.weeklyCalendar}>
       <h3 className={styles.calendarTitle}>Calendar (Weekly View)</h3>
@@ -310,7 +323,16 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       <div className={styles.dayHeaderRow}>
         <div className={styles.timeHeader}>Time</div>
         {weekDates.map((date, idx) => (
-          <div key={idx} className={`${styles.dayHeader} ${date.toDateString() === nowDate.toDateString() ? styles.today : ""}`}>
+          <div
+            key={idx}
+            className={`${styles.dayHeader} ${date.toDateString() === nowDate.toDateString() ? styles.today : ""}`}
+            onClick={() => {
+              setSelectedDay(date.getDate());
+              setSelectedDayEvents(null); // reset before loading
+              loadDay(date);
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <div className={styles.dayWeekday}>{date.toLocaleDateString("en-US", { weekday: "short" })}</div>
             <div className={styles.dayNumber}>{date.getDate()}</div>
             <div className={styles.dayMonth}>{date.toLocaleDateString("en-US", { month: "short" })}</div>
@@ -388,8 +410,8 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                       title={`${ev.summary}\n${startDate.toLocaleTimeString()} - ${endDate.toLocaleTimeString()}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedDay(date.getDate());
-                        loadDay(date);
+                        console.log('[WeeklyCalendar] Event clicked', ev);
+                        setSelectedEvent(ev);
                       }}
                     >
                       {!hideContent && (
@@ -413,8 +435,11 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         })}
       </div>
 
-      {/* Modal */}
-      {selectedDay && selectedDayEvents && (
+      {/* Modals */}
+
+
+
+      {selectedDay !== null && selectedDayEvents !== null && (
         <DayEventsModal
           day={selectedDay}
           month={weekStart.getMonth() + 1}
@@ -429,6 +454,36 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
           onConfigUpdate={() => {
             onConfigRefresh && onConfigRefresh();
           }}
+          footer={
+            <button
+              style={{ margin: '16px 0 0 0', padding: '8px 16px', fontWeight: 600, borderRadius: 8, background: '#222', color: '#fff', border: '1px solid #444', cursor: 'pointer' }}
+              onClick={() => {
+                setShowQuickSchedule(true);
+                setQuickScheduleDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), selectedDay));
+              }}
+            >
+              + Schedule appointment
+            </button>
+          }
+        />
+      )}
+      {selectedEvent !== null && (
+        <EventModal
+          event={selectedEvent}
+          config={config}
+          onClose={() => setSelectedEvent(null)}
+        />
+      )}
+      {showQuickSchedule && quickScheduleDate && (
+        <ScheduleAppointmentModal
+          open={showQuickSchedule}
+          onClose={() => setShowQuickSchedule(false)}
+          onScheduled={() => {
+            setShowQuickSchedule(false);
+            onConfigRefresh && onConfigRefresh();
+            window.dispatchEvent(new CustomEvent('calendar-refresh'));
+          }}
+          defaultDate={quickScheduleDate.toISOString().split('T')[0]}
         />
       )}
     </div>

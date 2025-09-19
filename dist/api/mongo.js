@@ -35,3 +35,34 @@ const CalendarConfigSchema = new mongoose.Schema({
 });
 export const CalendarConfigModel = mongoose.models.CalendarConfig ||
     mongoose.model("CalendarConfig", CalendarConfigSchema);
+// Site-wide settings
+const SiteSettingsSchema = new mongoose.Schema({
+    timezone: {
+        type: String,
+        default: "America/Denver", // Mountain Time (Utah)
+        required: true,
+    },
+    businessName: {
+        type: String,
+        default: "Nat's Accounting",
+    },
+    businessHours: {
+        type: Object,
+        default: {
+            monday: { start: "09:00", end: "17:00", enabled: true },
+            tuesday: { start: "09:00", end: "17:00", enabled: true },
+            wednesday: { start: "09:00", end: "17:00", enabled: true },
+            thursday: { start: "09:00", end: "17:00", enabled: true },
+            friday: { start: "09:00", end: "17:00", enabled: true },
+            saturday: { start: "09:00", end: "17:00", enabled: true },
+            sunday: { start: "09:00", end: "17:00", enabled: false },
+        },
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now,
+    },
+});
+export const SiteSettingsModel = mongoose.models.SiteSettings ||
+    mongoose.model("SiteSettings", SiteSettingsSchema);
+// Legacy GoogleTokens collection removed in favor of per-user embedded refresh token only.

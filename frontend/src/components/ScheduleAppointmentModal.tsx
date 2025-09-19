@@ -8,19 +8,24 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onScheduled: () => void;
+  defaultDate?: string;
 }
 
 
-export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onScheduled }) => {
+export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onScheduled, defaultDate }) => {
   const [form, setForm] = useState({
     name: "",
     description: "",
     location: "",
     videoUrl: "",
-    date: "",
+    date: defaultDate || "",
     time: "",
     length: 30,
   });
+  useEffect(() => {
+    if (defaultDate) setForm(f => ({ ...f, date: defaultDate }));
+    // eslint-disable-next-line
+  }, [defaultDate]);
   // Default to Mountain Time, but could fetch from settings API if needed
   const TIMEZONE = "America/Denver";
   const [buffer, setBuffer] = useState<string>("0");
@@ -136,8 +141,8 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
   };
   if (!open) return null;
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalCard} style={{ maxHeight: '90vh', overflow: 'auto', minWidth: 600, width: 'min(90vw, 800px)' }}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="schedule-modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflow: 'auto', minWidth: 600, width: 'min(90vw, 800px)' }}>
         <h2 style={{ marginBottom: 16 }}>Schedule Appointment</h2>
         <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
           {/* Left column: Info */}
