@@ -2,8 +2,8 @@ import { Router } from "express";
 import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
-import type { AvailabilitySlot } from "../types.js";
-import { listMeetings } from "../scheduling.js";
+import type { AvailabilitySlot } from "../types";
+import { listMeetings } from "../scheduling";
 
 const router = Router();
 
@@ -120,4 +120,4 @@ router.get("/", async (req, res) => {
   });
 });
 
-export default router;
+export { router };

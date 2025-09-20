@@ -1,10 +1,7 @@
 import { Router } from "express";
 import { createObject, fetchCalendars, DAVClient } from "tsdav";
 import { getSession, getCalendarsCache } from "../icloudSession";
-// No ical-generator: use minimal ICS string builder
 import { DateTime } from "luxon";
-
-// ...existing code...
 
 const router = Router();
 
@@ -28,7 +25,7 @@ router.post("/schedule", async (req, res) => {
       mountainEnd = mountainStart.plus({ minutes: 30 });
     }
 
-    if (provider === "icloud") {
+  if (provider === "icloud") {
       const session = getSession();
       const calendarsCache = getCalendarsCache();
       if (!session || !calendarsCache) {
@@ -104,7 +101,7 @@ router.post("/schedule", async (req, res) => {
       icsLines.push('END:VEVENT', 'END:VCALENDAR');
       let icsString = icsLines.join('\r\n');
       console.log('[icloud][create] ICS string to upload:', icsString);
-      try {
+  try {
         console.log('[icloud][create] Attempting to create event on calendar:', calendar.displayName, 'URL:', calendar.url);
         console.log('[icloud][create] Session appleId:', session?.appleId);
         // Add Basic Auth header for iCloud CalDAV
@@ -127,7 +124,21 @@ router.post("/schedule", async (req, res) => {
           body: icsString,
         });
         console.log('[icloud][create] createObject result:', result);
-        return res.json({ success: true, result });
+  // Invalidate day and week cache for this date
+  const { invalidateCache, createCacheKey } = await import("../cache");
+        const eventDate = mountainStart.toISODate();
+        if (eventDate) {
+          // Invalidate day cache
+          await invalidateCache(createCacheKey("icloud", "day", eventDate));
+        }
+        // Invalidate week cache (for any week containing this date)
+        // Find week start/end (Sunday-Saturday)
+        const weekStart = mountainStart.startOf('week').toISODate();
+        const weekEnd = mountainStart.endOf('week').toISODate();
+        if (weekStart && weekEnd) {
+          await invalidateCache(createCacheKey("icloud", "week", weekStart, weekEnd));
+        }
+  return res.json({ success: true, result });
       } catch (err) {
         console.error('[icloud][create] Error creating event:', err);
         let message = 'Unknown error';
@@ -152,5 +163,4 @@ router.post("/schedule", async (req, res) => {
 });
 // Removed broken /link endpoint (calendarFeedUrl is not used)
 
-
-export default router;
+export { router };

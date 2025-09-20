@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth";
 
 // Merged events endpoint that pulls from iCloud and Google week endpoints and returns a unified list.
 // This avoids duplicating the complex expansion / filtering logic already implemented in the
@@ -123,4 +123,4 @@ router.get("/week", requireAdmin, async (req, res) => {
   });
 });
 
-export default router;
+export { router };

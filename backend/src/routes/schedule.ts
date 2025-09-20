@@ -6,8 +6,8 @@ import {
   scheduleMeeting,
   listMeetings,
   cancelMeeting,
-} from "../scheduling.js";
-import type { ScheduleRequestBody } from "../types.js";
+} from "../scheduling";
+import type { ScheduleRequestBody } from "../types";
 
 const router = Router();
 
@@ -51,4 +51,4 @@ router.post("/:id/cancel", (req, res) => {
   res.json({ ok: true });
 });
 
-export default router;
+export { router };

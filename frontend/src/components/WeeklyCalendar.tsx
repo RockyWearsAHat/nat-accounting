@@ -6,6 +6,7 @@ import { DayEventsModal } from "./DayEventsModal";
 import { ScheduleAppointmentModal } from "./ScheduleAppointmentModal";
 import { EventModal } from "./EventModal";
 import styles from "./calendar.module.css";
+import { toZonedTime } from "date-fns-tz";
 
 interface WeeklyCalendarProps {
   config: CalendarConfig | null;
@@ -67,7 +68,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [selectedDayEvents, setSelectedDayEvents] = useState<CalendarEvent[] | null>(null);
+  // Remove selectedDayEvents state, use week cache
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [dayModalLoading, setDayModalLoading] = useState(false);
   const [showQuickSchedule, setShowQuickSchedule] = useState(false);
@@ -82,11 +83,36 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   }, []);
 
   // Load events when week changes or when a calendar-refresh event is fired
+
+  // Robust fetch: only set state for latest request
   useEffect(() => {
-    loadWeek();
-    const handler = () => loadWeek();
+    let isCurrent = true;
+    setLoading(true);
+    const fetchWeek = async () => {
+      try {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        const data = await http.get<any>("/api/merged/week", {
+          start: weekStart.toISOString().split("T")[0],
+          end: weekEnd.toISOString().split("T")[0],
+        });
+        if (isCurrent) {
+          setEvents(data.events || []);
+        }
+      } catch (error) {
+        if (isCurrent) setEvents([]);
+        console.error("[WeeklyCalendar] Error loading week events:", error);
+      } finally {
+        if (isCurrent) setLoading(false);
+      }
+    };
+    fetchWeek();
+    const handler = () => fetchWeek();
     window.addEventListener('calendar-refresh', handler);
-    return () => window.removeEventListener('calendar-refresh', handler);
+    return () => {
+      isCurrent = false;
+      window.removeEventListener('calendar-refresh', handler);
+    };
   }, [weekStart]);
 
   // Month names for navigation
@@ -134,20 +160,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     }
   };
 
-  // Load day events
-  const loadDay = async (date: Date) => {
-    setDayModalLoading(true);
-    try {
-      const dateStr = date.toISOString().split("T")[0];
-      const data = await http.get<any>("/api/icloud/day", { date: dateStr });
-      setSelectedDayEvents(data.events || []);
-    } catch (error) {
-      console.error("[WeeklyCalendar] Error loading day events:", error);
-      setSelectedDayEvents([]);
-    } finally {
-      setDayModalLoading(false);
-    }
-  };
+  // Remove loadDay, use week cache for day modal
 
   // Navigation functions
   const navigateWeek = (direction: "prev" | "next") => {
@@ -195,24 +208,27 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   > = {};
   const overlapSlices: Record<string, { startMinutes:number; durationMinutes:number; colors:[string,string]; titles:[string,string]; label:string; topRounded:boolean; bottomRounded:boolean; aIndex:number; bIndex:number }[]> = {};
   // --- Timezone helpers ---
-  const activeTZ = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  function getTzParts(dateISO:string){
+  // Always use Mountain Time for calendar grid
+  const activeTZ = timezone || 'America/Denver';
+  function getTzParts(dateISO: string) {
     try {
-      const d = new Date(dateISO);
-      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: activeTZ, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false });
-      const parts = fmt.formatToParts(d);
-      const grab = (t:string)=> parts.find(p=>p.type===t)?.value || '00';
+  const zoned = toZonedTime(dateISO, activeTZ);
       return {
-        year: grab('year'), month: grab('month'), day: grab('day'),
-        hour: parseInt(grab('hour'),10), minute: parseInt(grab('minute'),10)
+        year: zoned.getFullYear().toString(),
+        month: (zoned.getMonth() + 1).toString().padStart(2, '0'),
+        day: zoned.getDate().toString().padStart(2, '0'),
+        hour: zoned.getHours(),
+        minute: zoned.getMinutes(),
       };
-    } catch { return {year:'0000', month:'00', day:'00', hour:0, minute:0}; }
+    } catch {
+      return { year: '0000', month: '00', day: '00', hour: 0, minute: 0 };
+    }
   }
-  function dayKeyFromISO(dateISO:string){
+  function dayKeyFromISO(dateISO: string) {
     const p = getTzParts(dateISO);
     return `${p.year}-${p.month}-${p.day}`;
   }
-  weekDates.forEach(d => {
+  weekDates.forEach((d) => {
     // derive key in timezone so week boundaries align visually
     const key = dayKeyFromISO(d.toISOString());
     eventsByDay[key] = [];
@@ -306,7 +322,9 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   // (removed)
   return (
     <div className={styles.weeklyCalendar}>
-      <h3 className={styles.calendarTitle}>Calendar (Weekly View)</h3>
+
+  <h3 className={styles.calendarTitle}>Calendar (Weekly View)</h3>
+  {loading && <div className={styles.calendarLoading}>Loading events…</div>}
 
       <div className={styles.calendarNav}>
         <button className={styles.navButton} onClick={() => navigateWeek("prev")}>Prev</button>
@@ -328,8 +346,6 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
             className={`${styles.dayHeader} ${date.toDateString() === nowDate.toDateString() ? styles.today : ""}`}
             onClick={() => {
               setSelectedDay(date.getDate());
-              setSelectedDayEvents(null); // reset before loading
-              loadDay(date);
             }}
             style={{ cursor: 'pointer' }}
           >
@@ -355,10 +371,12 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         </div>
         {/* Day columns */}
         {weekDates.map((date, idx) => {
-          const dateKey = date.toISOString().split("T")[0];
+          // Use Mountain Time day key for both grouping and rendering
+          const dateKey = dayKeyFromISO(date.toISOString());
           const dayList = eventsByDay[dateKey] || [];
           const stripes = overlapSlices[dateKey] || [];
-          const isToday = date.toDateString() === nowDate.toDateString();
+          // Compare today in the same timezone
+          const isToday = dayKeyFromISO(date.toISOString()) === dayKeyFromISO(nowDate.toISOString());
           return (
             <div key={idx} className={`${styles.dayColumn} ${isToday ? styles.todayColumn : ""}`}>
               {hourRange.map(hour => (
@@ -439,20 +457,27 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
 
 
 
-      {selectedDay !== null && selectedDayEvents !== null && (
+      {selectedDay !== null && (
         <DayEventsModal
           day={selectedDay}
           month={weekStart.getMonth() + 1}
           year={weekStart.getFullYear()}
-          events={selectedDayEvents}
+          events={(() => {
+            // Find events for this day from week cache
+            const date = new Date(weekStart);
+            date.setDate(selectedDay);
+            const key = date.toISOString().split('T')[0];
+            return eventsByDay[key] || [];
+          })()}
           config={config}
           onClose={() => {
             setSelectedDay(null);
-            setSelectedDayEvents(null);
             onConfigRefresh && onConfigRefresh();
           }}
           onConfigUpdate={() => {
             onConfigRefresh && onConfigRefresh();
+            // Reload week after config update (e.g. after scheduling)
+            loadWeek();
           }}
           footer={
             <button

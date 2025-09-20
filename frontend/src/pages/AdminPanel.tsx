@@ -138,10 +138,27 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
       <div className={styles.sectionCard}>
         <h4>Google Calendar Integration</h4>
         {googleStatus?.connected ? (
-          <>
-            <p className={styles.mutedSmall}>Connected. Tokens stored for admin user{googleStatus.expires && ` (exp: ${new Date(googleStatus.expires).toLocaleString()})`}.</p>
-            <button onClick={loadConfig} className={styles.btnSecondary}>Reload Google Calendars</button>
-          </>
+          (() => {
+            const expired = googleStatus.expires && new Date(googleStatus.expires).getTime() < Date.now();
+            if (expired) {
+              return (
+                <>
+                  <p className={styles.mutedSmall}>
+                    Token expired ({googleStatus.expires && new Date(googleStatus.expires).toLocaleString()}).
+                  </p>
+                  <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.btnPrimary}>
+                    {connectingGoogle ? 'Redirecting…' : 'Reauthorize Google Calendar'}
+                  </button>
+                </>
+              );
+            }
+            return (
+              <>
+                <p className={styles.mutedSmall}>Connected. Tokens stored for admin user{googleStatus.expires && ` (exp: ${new Date(googleStatus.expires).toLocaleString()})`}.</p>
+                <button onClick={loadConfig} className={styles.btnSecondary}>Reload Google Calendars</button>
+              </>
+            );
+          })()
         ) : (
           <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.navButton}>{connectingGoogle? 'Redirecting…':'Connect Google Calendar'}</button>
         )}

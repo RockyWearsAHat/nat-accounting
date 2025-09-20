@@ -1,61 +1,65 @@
-
-
 // Delete event by UID (admin only)
 // (Moved after router declaration)
 
 
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
-import { connect as connectMongo, CalendarConfigModel } from "../mongo.js";
-import {
-  getCachedEvents,
-  setCachedEvents,
-  createCacheKey,
-  invalidateCache,
-} from "../cache.js";
-import { getSession, setSession, getCalendarsCache, setCalendarsCache } from "../icloudSession.js";
-// CalDAV (iCloud) via dav library. NOTE: Do NOT store credentials plaintext in production.
-// Use an app-specific password generated in Apple ID (Security > App-Specific Passwords).
-// 2FA Apple logins cannot be fully automated with normal password.
-// This is a demo-only minimal integration.
-// @ts-ignore - library lacks bundled types
-import { createDAVClient } from "tsdav";
-import { google } from "googleapis";
-import { User } from "../models/User.js";
-// Using a lightweight custom ICS parser (handles folding + simple RRULE expansion)
-
-// Config: calendars considered for conflict & whitelisted / forced busy event UIDs
-const busyCalendarUrls = new Set<string>(); // if empty we'll treat ALL calendars as busy by default until user sets
-const whitelistUIDs = new Set<string>(); // events here NEVER block
-const busyEventUIDs = new Set<string>(); // events here ALWAYS block (unless whitelisted)
-const calendarColors: Record<string, string> = {}; // calendar url -> color hex
-let configLoaded = false; // persistence flag
-
-async function loadPersistedConfigIfNeeded() {
-  if (configLoaded) return;
-  await connectMongo();
-  try {
-    console.log("[icloud] Loading persisted config...");
-    const doc = await CalendarConfigModel.findOne();
-    if (doc) {
-      busyCalendarUrls.clear();
-      doc.busyCalendars.forEach((u: string) => busyCalendarUrls.add(u));
-      whitelistUIDs.clear();
-      doc.whitelistUIDs.forEach((u: string) => whitelistUIDs.add(u));
-      busyEventUIDs.clear();
-      doc.busyEventUIDs.forEach((u: string) => busyEventUIDs.add(u));
-      Object.assign(calendarColors, doc.get("calendarColors") || {});
-      console.log(
-        "[icloud] Config loaded - busy calendars:",
-        Array.from(busyCalendarUrls).length
-      );
-    } else {
-      console.log("[icloud] No persisted config found, will use defaults");
-    }
-  } catch (e) {
-    console.warn("[icloud] load persisted config failed", e);
-  } finally {
-    configLoaded = true;
+import { requireAuth } from "../middleware/auth";
+import { connect as connectMongo, CalendarConfigModel } from "../mongo";
+            // RRULE expansion
+            const rruleMatch = obj.data.match(/RRULE:(.+)/);
+            let rruleInstances: Date[] = [];
+            if (rruleMatch) {
+              try {
+                const rule = rrulestr(rruleMatch[0].replace('RRULE:', ''), { dtstart: startDate });
+                rruleInstances = rule.between(from, to, true);
+                for (const occ of rruleInstances) {
+                  const durationMs = endDate.getTime() - startDate.getTime();
+                  const occEnd = new Date(occ.getTime() + durationMs);
+                  if (occEnd < from || occ > to) continue;
+                  // Avoid duplicate: if this instance is the original DTSTART, skip for now
+                  if (occ.getTime() === startDate.getTime()) continue;
+                  events.push({
+                    uid,
+                    summary,
+                    start: occ.toISOString(),
+                    end: occEnd.toISOString(),
+                    raw: obj.data,
+                    isRecurring: true,
+                  });
+                }
+              } catch (err) {
+                console.warn(`[collectEventsFromObjects][rrule] Failed to expand RRULE for UID=${uid}:`, err);
+              }
+            }
+            // Always check if the original instance (non-recurring or first of recurring) is in range
+            if (isNaN(startDate.getTime())) {
+              console.log('[collectEventsFromObjects][skip] Invalid DTSTART', start);
+              continue;
+            }
+            if (isNaN(endDate.getTime())) endDate = startDate;
+            if (startDate > to) {
+              console.log(`[collectEventsFromObjects][filter] Event starts after range: UID=${uid} summary="${summary}" start=${startDate.toISOString()} > to=${to.toISOString()}`);
+              continue;
+            }
+            if (endDate < from) {
+              console.log(`[collectEventsFromObjects][filter] Event ends before range: UID=${uid} summary="${summary}" end=${endDate.toISOString()} < from=${from.toISOString()}`);
+              continue;
+            }
+            // For recurring events, only add the original instance if it falls in the range and is not already included
+            let alreadyIncluded = false;
+            if (rruleInstances.length > 0) {
+              alreadyIncluded = rruleInstances.some(d => d.getTime() === startDate.getTime());
+            }
+            if (!alreadyIncluded) {
+              events.push({
+                uid,
+                summary,
+                start: startDate.toISOString(),
+                end: endDate.toISOString(),
+                raw: obj.data,
+                isRecurring: !!rruleMatch,
+              });
+            }
   }
 }
 
@@ -94,7 +98,10 @@ function requireAdmin(req: any, res: any, next: any) {
 
 async function initFromEnvIfPossible() {
   const session = getSession();
-  if (session) return;
+  if (session) {
+    console.log('[icloud:initFromEnvIfPossible] Session already exists');
+    return;
+  }
   const appleId = process.env.APPLE_ID;
   const appPassword = process.env.APPLE_APP_PASSWORD;
   if (!appleId || !appPassword) {
@@ -104,7 +111,7 @@ async function initFromEnvIfPossible() {
     return;
   }
   try {
-    console.log("[icloud] Initializing session from environment variables...");
+    console.log("[icloud] Initializing session from environment variables...", { appleId, hasPassword: !!appPassword });
     setSession({ appleId, appPassword });
     const client = await createDAVClient({
       serverUrl: "https://caldav.icloud.com",
@@ -113,6 +120,7 @@ async function initFromEnvIfPossible() {
       defaultAccountType: "caldav",
     });
     const calendars = await client.fetchCalendars();
+    console.log('[icloud:initFromEnvIfPossible] Calendars fetched:', calendars);
     setCalendarsCache(calendars.map((c: any) => ({
       displayName: c.displayName,
       url: c.url,
@@ -130,12 +138,7 @@ async function initFromEnvIfPossible() {
         "[icloud] No busy calendars configured, marking all as busy by default"
       );
     }
-
-    console.log(
-      "[icloud] Session initialized from env; calendars:",
-      calendarsCache ? calendarsCache.map((c) => c.displayName).join(", ") : "none"
-    );
-  } catch (e) {
+  } catch (e: any) {
     console.warn("[icloud] Auto-init from env failed", e);
     setSession(null);
   }
@@ -211,10 +214,13 @@ router.get("/config", requireAdmin, async (req, res) => {
         delete (user as any).googleTokens.accessToken;
         await user.save().catch(()=>{});
       }
-      const gClient = buildGoogleClient();
+      const gClient = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI
+      );
       gClient.setCredentials({
         refresh_token: user.googleTokens.refreshToken,
-        // Access token omitted intentionally; googleapis library will fetch using refresh token
       });
       const cal = google.calendar({ version: "v3", auth: gClient });
       const gList = await cal.calendarList.list({ maxResults: 250 });
@@ -260,9 +266,13 @@ router.post("/config", requireAdmin, async (req, res) => {
   try {
     const user = await User.findById((req as any).user?.id);
     if (user?.googleTokens?.refreshToken) {
-      const gClient = buildGoogleClient();
+      const gClient = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI
+      );
       gClient.setCredentials({
-        refresh_token: user.googleTokens.refreshToken, // refresh-only; access token fetched on demand
+        refresh_token: user.googleTokens.refreshToken,
       });
       const cal = google.calendar({ version: "v3", auth: gClient });
       const gList = await cal.calendarList.list({ maxResults: 250 });
@@ -316,8 +326,19 @@ router.get("/today", requireAdmin, async (_req, res) => {
   if (!session) await initFromEnvIfPossible();
   session = getSession();
   if (!session) return res.status(400).json({ error: "not_connected" });
-  if (!session.calendarHref)
-    return res.status(400).json({ error: "no_calendar_selected" });
+  if (!session.calendarHref) {
+    // Try to auto-select the 'Business' calendar
+    const calendarsCache = getCalendarsCache() || [];
+    const businessCal = calendarsCache.find((c: any) => c.displayName === 'Business');
+    if (businessCal) {
+      session.calendarHref = businessCal.url;
+      setSession(session);
+      console.warn('[icloud] calendarHref was missing, auto-selected Business calendar:', businessCal.url);
+    } else {
+      console.error('[icloud] calendarHref missing and Business calendar not found.');
+      return res.status(400).json({ error: "no_calendar_selected" });
+    }
+  }
   try {
     const { appleId, appPassword, calendarHref } = session;
     const client = await createDAVClient({
@@ -333,7 +354,7 @@ router.get("/today", requireAdmin, async (_req, res) => {
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(dayStart.getTime() + 86400000);
     const events = collectEventsFromObjects(objects, dayStart, dayEnd).map(
-      (e) => addBlocking(e)
+      (e: any) => addBlocking(e)
     );
     res.json({ events });
   } catch (e: any) {
@@ -382,12 +403,14 @@ router.get("/month", requireAdmin, async (req, res) => {
             objectCount: (objects || []).length,
           });
         const eventsRaw = collectEventsFromObjects(objects, from, to)
-          .map((ev) => ({
+          .map((ev: any) => ({
             ...ev,
             calendar: cal.displayName,
             calendarUrl: cal.url,
+            calendarId: cal.url,
+            calendarSource: 'icloud',
           }))
-          .map((ev) => addBlocking(ev));
+          .map((ev: any) => addBlocking(ev));
         // Hide events whose calendar isn't marked busy AND event isn't forced busy
         const events = eventsRaw.filter((ev) => {
           if (busyCalendarUrls.has(cal.url)) return true; // busy calendar -> show
@@ -452,17 +475,18 @@ router.get("/week", requireAdmin, async (req, res) => {
 
   // Check cache first
   const cacheKey = createCacheKey("icloud", "week", startStr, endStr);
+  console.log(`[icloud][cache] Using cacheKey:`, cacheKey);
   const cachedEvents = await getCachedEvents(cacheKey);
   if (cachedEvents) {
-    console.log(
-      `[icloud] Returning cached week events: ${cachedEvents.length}`
-    );
+    console.log(`[icloud][cache] HIT for week: ${cachedEvents.length} events`);
     return res.json({
       range: { start: from.toISOString(), end: to.toISOString() },
       events: cachedEvents,
-      debug: debug ? { cached: true } : undefined,
+      debug: debug ? { cached: true, cacheKey } : undefined,
       cached: true,
     });
+  } else {
+    console.log(`[icloud][cache] MISS for week`);
   }
 
   try {
@@ -505,13 +529,135 @@ router.get("/week", requireAdmin, async (req, res) => {
           });
         }
 
-        const eventsRaw = collectEventsFromObjects(objects, from, to)
-          .map((ev) => ({
+        // Debug: log all object UIDs and types
+        for (const obj of objects) {
+          if (obj && obj.data) {
+            const match = obj.data.match(/UID:(.+)/);
+            const uid = match ? match[1].split('\n')[0].trim() : 'unknown';
+            const type = obj.data.includes('BEGIN:VEVENT') ? 'VEVENT' : (obj.data.match(/BEGIN:(\w+)/)?.[1] || 'unknown');
+            console.log(`[collectEventsFromObjects][raw] UID=${uid} TYPE=${type} LEN=${obj.data.length}`);
+          }
+        }
+        // Wrap the original function to add debug for skipped events
+        function parseICalDate(val: string) {
+          // Handles: YYYYMMDD, YYYYMMDDTHHmmss, YYYYMMDDTHHmm, with or without Z
+          let match;
+          if ((match = val.match(/^([0-9]{8})$/))) {
+            // All-day event (DATE)
+            console.log('[parseICalDate] Match all-day', val, match);
+            return new Date(`${val.slice(0,4)}-${val.slice(4,6)}-${val.slice(6,8)}T00:00:00`);
+          }
+          if ((match = val.match(/^([0-9]{8})T([0-9]{6})Z$/))) {
+            // UTC (HHmmss)
+            console.log('[parseICalDate] Match UTC 6-digit', val, match);
+            return new Date(`${val.slice(0,4)}-${val.slice(4,6)}-${val.slice(6,8)}T${val.slice(9,11)}:${val.slice(11,13)}:${val.slice(13,15)}Z`);
+          }
+          if ((match = val.match(/^([0-9]{8})T([0-9]{4})Z$/))) {
+            // UTC (HHmm)
+            console.log('[parseICalDate] Match UTC 4-digit', val, match);
+            return new Date(`${val.slice(0,4)}-${val.slice(4,6)}-${val.slice(6,8)}T${val.slice(9,11)}:${val.slice(11,13)}:00Z`);
+          }
+          if ((match = val.match(/^([0-9]{8})T([0-9]{6})$/))) {
+            // Local time (HHmmss)
+            console.log('[parseICalDate] Match local 6-digit', val, match);
+            return new Date(`${val.slice(0,4)}-${val.slice(4,6)}-${val.slice(6,8)}T${val.slice(9,11)}:${val.slice(11,13)}:${val.slice(13,15)}`);
+          }
+          if ((match = val.match(/^([0-9]{8})T([0-9]{4})$/))) {
+            // Local time (HHmm)
+            console.log('[parseICalDate] Match local 4-digit', val, match);
+            return new Date(`${val.slice(0,4)}-${val.slice(4,6)}-${val.slice(6,8)}T${val.slice(9,11)}:${val.slice(11,13)}:00`);
+          }
+          // Fallback: try Date constructor
+          console.log('[parseICalDate] Fallback', val);
+          return new Date(val);
+        }
+        function collectEventsWithDebug(objs: any[], from: Date, to: Date) {
+          const events = [];
+          for (const obj of objs) {
+            if (!obj || !obj.data) {
+              console.log('[collectEventsFromObjects][skip] Missing data');
+              continue;
+            }
+            if (!obj.data.includes('BEGIN:VEVENT')) {
+              console.log('[collectEventsFromObjects][skip] Not a VEVENT');
+              continue;
+            }
+            // Try to parse DTSTART/DTEND
+            const dtstart = obj.data.match(/DTSTART[^:]*:(.+)/);
+            const dtend = obj.data.match(/DTEND[^:]*:(.+)/);
+            if (!dtstart) {
+              console.log('[collectEventsFromObjects][skip] No DTSTART', obj.data.slice(0, 100));
+              continue;
+            }
+            // Parse date
+            const start = dtstart[1].trim();
+            let end = dtend ? dtend[1].trim() : start;
+            let startDate = parseICalDate(start);
+            let endDate = parseICalDate(end);
+            const uid = obj.data.match(/UID:(.+)/)?.[1]?.split('\n')[0].trim() || 'unknown';
+            const summary = obj.data.match(/SUMMARY:(.+)/)?.[1]?.split('\n')[0].trim() || '';
+            // RRULE expansion
+            const rruleMatch = obj.data.match(/RRULE:(.+)/);
+            let rruleInstances: string[] = [];
+            if (rruleMatch) {
+              try {
+                const rule = rrulestr(rruleMatch[0].replace('RRULE:', ''), { dtstart: startDate });
+                const between = rule.between(from, to, true);
+                for (const occ of between) {
+                  const durationMs = endDate.getTime() - startDate.getTime();
+                  const occEnd = new Date(occ.getTime() + durationMs);
+                  if (occEnd < from || occ > to) continue;
+                  events.push({
+                    uid,
+                    summary,
+                    start: occ.toISOString(),
+                    end: occEnd.toISOString(),
+                    raw: obj.data,
+                    isRecurring: true,
+                  });
+                  rruleInstances.push(occ.toISOString());
+                }
+              } catch (err) {
+                console.warn(`[collectEventsFromObjects][rrule] Failed to expand RRULE for UID=${uid}:`, err);
+              }
+            }
+            // Always consider the original instance (for one-off events, or if DTSTART is in range and not duplicated)
+            console.log(`[collectEventsFromObjects][date] UID=${uid} summary="${summary}" DTSTART=${start} -> ${startDate.toISOString()} DTEND=${end} -> ${endDate.toISOString()} RANGE=[${from.toISOString()} to ${to.toISOString()}]`);
+            if (isNaN(startDate.getTime())) {
+              console.log('[collectEventsFromObjects][skip] Invalid DTSTART', start);
+              continue;
+            }
+            if (isNaN(endDate.getTime())) endDate = startDate;
+            if (startDate > to) {
+              console.log(`[collectEventsFromObjects][filter] Event starts after range: UID=${uid} summary="${summary}" start=${startDate.toISOString()} > to=${to.toISOString()}`);
+              continue;
+            }
+            if (endDate < from) {
+              console.log(`[collectEventsFromObjects][filter] Event ends before range: UID=${uid} summary="${summary}" end=${endDate.toISOString()} < from=${from.toISOString()}`);
+              continue;
+            }
+            // Only add the original instance if it wasn't already included by RRULE expansion
+            if (!rruleInstances.includes(startDate.toISOString())) {
+              events.push({
+                uid,
+                summary,
+                start: startDate.toISOString(),
+                end: endDate.toISOString(),
+                raw: obj.data,
+              });
+            }
+          }
+          return events;
+        }
+        const eventsRaw = collectEventsWithDebug(objects, from, to)
+          .map((ev: any) => ({
             ...ev,
             calendar: cal.displayName,
             calendarUrl: cal.url,
+            calendarId: cal.url,
+            calendarSource: 'icloud',
           }))
-          .map((ev) => addBlocking(ev));
+          .map((ev: any) => addBlocking(ev));
 
         console.log(
           `[icloud] Calendar ${cal.displayName}: ${eventsRaw.length} events after processing`
@@ -519,9 +665,13 @@ router.get("/week", requireAdmin, async (req, res) => {
 
         // Apply filtering like in month endpoint
         const events = eventsRaw.filter((ev) => {
-          if (busyCalendarUrls.has(cal.url)) return true; // busy calendar -> show
-          if (ev.uid && busyEventUIDs.has(ev.uid)) return true; // forced busy -> show
-          return false; // hide otherwise
+          const isBusy = busyCalendarUrls.has(cal.url);
+          const isForcedBusy = ev.uid && busyEventUIDs.has(ev.uid);
+          const shouldShow = isBusy || isForcedBusy;
+          if (!shouldShow) {
+            console.log(`[icloud][filter] Hiding event UID=${ev.uid} summary="${ev.summary}" from calendar ${cal.displayName} (not busy, not forced busy)`);
+          }
+          return shouldShow;
         });
 
         console.log(
@@ -613,6 +763,8 @@ router.get("/day", requireAdmin, async (req, res) => {
             ...ev,
             calendar: cal.displayName,
             calendarUrl: cal.url,
+            calendarId: cal.url,
+            calendarSource: 'icloud',
           }))
           .map((ev) => addBlocking(ev));
         // Do NOT filter here; include non-busy calendar events so user can force busy.
@@ -647,10 +799,15 @@ router.get("/day", requireAdmin, async (req, res) => {
 // Aggregate events across all calendars for the next N days (default 7)
 router.get("/all", requireAdmin, async (req, res) => {
   let session = getSession();
+  console.log('[icloud:/all] Session:', session);
   if (!session) await initFromEnvIfPossible();
   session = getSession();
-  if (!session) return res.status(400).json({ error: "not_connected" });
+  if (!session) {
+    console.log('[icloud:/all] No session after init');
+    return res.status(400).json({ error: "not_connected" });
+  }
   const calendarsCache = getCalendarsCache() || [];
+  console.log('[icloud:/all] calendarsCache:', calendarsCache);
   const days = Math.min(31, parseInt(String(req.query.days || "7"), 10) || 7);
   const blockingOnly = req.query.blockingOnly === "1";
   const debug = req.query.debug === "1";
@@ -682,6 +839,7 @@ router.get("/all", requireAdmin, async (req, res) => {
 
   try {
     const { appleId, appPassword } = session;
+    console.log('[icloud:/all] Creating DAV client with:', { appleId, hasPassword: !!appPassword });
     const client = await createDAVClient({
       serverUrl: "https://caldav.icloud.com",
       credentials: { username: appleId, password: appPassword },
@@ -689,6 +847,7 @@ router.get("/all", requireAdmin, async (req, res) => {
       defaultAccountType: "caldav",
     });
     const calendars = calendarsCache.length ? calendarsCache : [];
+    console.log('[icloud:/all] Using calendars:', calendars);
     const allEvents: any[] = [];
     const debugInfo: any[] = [];
 
@@ -717,12 +876,14 @@ router.get("/all", requireAdmin, async (req, res) => {
           startWindow,
           endWindow
         )
-          .map((ev) => ({
+          .map((ev: any) => ({
             ...ev,
             calendar: cal.displayName,
             calendarUrl: cal.url,
+            calendarId: cal.url,
+            calendarSource: 'icloud',
           }))
-          .map((ev) => addBlocking(ev));
+          .map((ev: any) => addBlocking(ev));
         const events = eventsRaw.filter((ev) => {
           if (busyCalendarUrls.has(cal.url)) return true;
           if (ev.uid && busyEventUIDs.has(ev.uid)) return true;
@@ -745,115 +906,88 @@ router.get("/all", requireAdmin, async (req, res) => {
           });
       }
     }
-    let events = allEvents;
-    if (blockingOnly) events = events.filter((e) => e.blocking);
-    events.sort((a, b) => a.start.localeCompare(b.start));
-
-    // Cache the results for 5 minutes
-    await setCachedEvents(cacheKey, events, 300);
-
-    console.log(
-      `[icloud] All response: ${events.length} total events (cached)`
-    );
-
+    // Delete event by UID (admin only)
+    router.post("/delete-event", requireAdmin, async (req, res) => {
+      const { uid, calendarId, calendarSource } = req.body || {};
+      if (!uid || !calendarId || !calendarSource) return res.status(400).json({ error: "uid_calendarId_calendarSource_required" });
+      if (calendarSource === 'icloud') {
+        let session = getSession();
+        if (!session) await loadPersistedConfigIfNeeded();
+        session = getSession();
+        if (!session) return res.status(400).json({ error: "not_connected" });
+        // Find event in cache for this calendar
+        const cacheKey = createCacheKey(calendarId);
+        const events = await getCachedEvents(cacheKey) || [];
+        const event = events.find((e: any) => e.uid === uid);
+        if (!event || !event.url) return res.status(404).json({ error: "event_not_found", details: "Event UID not found in cache or iCloud." });
+        // Use CalDAV DELETE
+        const fetch = (global as any).fetch || require("node-fetch");
+        const authHeader =
+          session?.appleId && session?.appPassword
+            ? {
+                Authorization:
+                  "Basic " + Buffer.from(session.appleId + ":" + session.appPassword).toString("base64"),
+              }
+            : {};
+        const result = await fetch(event.url, {
+          method: "DELETE",
+          headers: {
+            ...(authHeader.Authorization ? { Authorization: authHeader.Authorization } : {}),
+          } as Record<string, string>,
+        });
+        if (!result.ok) {
+          return res.status(500).json({ error: "delete_failed", status: result.status, details: await result.text() });
+        }
+        // Remove from cache (if present)
+        await setCachedEvents(cacheKey, events.filter((e: any) => e.uid !== uid));
+        return res.json({ ok: true });
+      } else if (calendarSource === 'google') {
+        // Google event deletion logic (requires Google API client, tokens, etc.)
+        // This is a placeholder; actual implementation should use Google API to delete event
+        // and remove from cache if present
+        // TODO: Implement Google Calendar event deletion
+        return res.status(501).json({ error: "google_event_deletion_not_implemented" });
+      } else {
+        return res.status(400).json({ error: "unsupported_calendar_source" });
+      }
+    });
+    allEvents.sort((a, b) => a.start.localeCompare(b.start));
     res.json({
       range: { start: startWindow.toISOString(), end: endWindow.toISOString() },
-      events,
+      events: allEvents,
       debug: debug ? debugInfo : undefined,
       cached: false,
     });
   } catch (e: any) {
-    console.error("iCloud aggregate fetch error", e);
-    res.status(500).json({ error: "icloud_aggregate_failed" });
+    console.error("iCloud all events fetch error", e);
+    res.status(500).json({ error: "icloud_all_events_failed" });
   }
 });
 
-interface RawEvent {
+/**
+ * RawEvent type for calendar events
+ */
+type RawEvent = {
   summary: string;
   start: Date;
   end?: Date;
   rrule?: string;
   exdates: Date[];
-  uid?: string;
-}
+  uid: string;
+};
 
-function collectEventsFromObjects(
-  objects: any[],
-  windowStart: Date,
-  windowEnd: Date
-) {
-  const events: {
-    summary: string;
-    start: string;
-    end?: string;
-    uid?: string;
-  }[] = [];
-  for (const obj of objects || []) {
-    if (typeof obj.data !== "string" || !obj.data.includes("BEGIN:VEVENT"))
-      continue;
-    const rawEvents = parseICSEvents(obj.data);
-    for (const ev of rawEvents) {
-      if (ev.rrule) {
-        const occs = expandRecurring(ev, windowStart, windowEnd);
-        for (const occ of occs) {
-          if (occ.start < windowEnd && (occ.end || occ.start) >= windowStart) {
-            events.push({
-              summary: ev.summary || "(No Title)",
-              start: occ.start.toISOString(),
-              end: occ.end?.toISOString(),
-              uid: ev.uid,
-            });
-          }
-        }
-      } else {
-        if (ev.start < windowEnd && (ev.end || ev.start) >= windowStart) {
-          events.push({
-            summary: ev.summary || "(No Title)",
-            start: ev.start.toISOString(),
-            end: ev.end?.toISOString(),
-            uid: ev.uid,
-          });
-        }
-      }
-    }
-  }
-  return events;
-}
-
-function parseICSEvents(raw: string): RawEvent[] {
-  // Unfold lines (RFC5545: lines starting with space are continuations)
-  const unfolded = raw.replace(/\r?\n[ \t]/g, (match) => "");
-  const lines = unfolded.split(/\r?\n/);
-  const out: RawEvent[] = [];
-  let cur: any = null;
-  let inEvent = false;
-  for (const line of lines) {
-    if (line === "BEGIN:VEVENT") {
-      inEvent = true;
-      cur = { exdates: [] };
-      continue;
-    }
-    if (line === "END:VEVENT") {
-      if (cur?.DTSTART) {
-        out.push(normalizeRawEvent(cur));
-      }
-      inEvent = false;
-      cur = null;
-      continue;
-    }
-    if (!inEvent || !cur) continue;
-    const idx = line.indexOf(":");
-    if (idx === -1) continue;
-    const namePart = line.slice(0, idx);
-    const value = line.slice(idx + 1);
-    const key = namePart.split(";")[0];
-    if (key === "EXDATE") {
-      value.split(",").forEach((v) => cur.exdates.push(parseDate(v)));
-    } else {
-      cur[key] = value;
-    }
-  }
-  return out;
+/**
+ * Extracts events from iCal objects for a given time window.
+ * This is a simplified version; adjust as needed for your data shape.
+ */
+function collectEventsFromObjects(objects: any[], windowStart: Date, windowEnd: Date): any[] {
+  // This should parse the objects array and return an array of event objects
+  // For now, assume objects are already event-like and filter by time window
+  return (objects || []).filter((obj: any) => {
+    const start = new Date(obj.start || obj.DTSTART || obj.dtstart || obj['start']);
+    const end = new Date(obj.end || obj.DTEND || obj.dtend || obj['end'] || start);
+    return start < windowEnd && end > windowStart;
+  });
 }
 
 function normalizeRawEvent(cur: any): RawEvent {
@@ -883,7 +1017,7 @@ function expandRecurring(ev: RawEvent, windowStart: Date, windowEnd: Date) {
   const results: { start: Date; end?: Date }[] = [];
   if (!ev.rrule) return results;
   const parts = Object.fromEntries(
-    ev.rrule.split(";").map((p) => {
+    ev.rrule.split(";").map((p: string) => {
       const [k, v] = p.split("=");
       return [k.toUpperCase(), v];
     })
@@ -899,7 +1033,7 @@ function expandRecurring(ev: RawEvent, windowStart: Date, windowEnd: Date) {
   const addOcc = (d: Date) => {
     if (count && occurrence >= count) return;
     if (d < maxEnd && d >= windowStart) {
-      if (!ev.exdates.some((x) => x.getTime() === d.getTime())) {
+  if (!ev.exdates.some((x: Date) => x.getTime() === d.getTime())) {
         occurrence++;
         results.push({
           start: new Date(d),
@@ -1028,62 +1162,4 @@ function parseDate(v: string) {
   return new Date(v);
 }
 
-
-// Delete event by UID (admin only)
-router.post("/delete-event", requireAdmin, async (req, res) => {
-  const { uid } = req.body || {};
-  if (!uid) return res.status(400).json({ error: "uid_required" });
-  let session = getSession();
-  if (!session) await loadPersistedConfigIfNeeded();
-  session = getSession();
-  if (!session) return res.status(400).json({ error: "not_connected" });
-  if (!session.calendarHref)
-    return res.status(400).json({ error: "no_calendar_selected" });
-  try {
-    // Use the calendarHref as the cache key
-    const cacheKey = createCacheKey(session.calendarHref);
-    const events = await getCachedEvents(cacheKey) || [];
-    const event = events.find((e: any) => e.uid === uid);
-    if (!event || !event.url) return res.status(404).json({ error: "event_not_found" });
-    // Use CalDAV DELETE
-    const fetch = (global as any).fetch || require("node-fetch");
-    const authHeader =
-      session?.appleId && session?.appPassword
-        ? {
-            Authorization:
-              "Basic " + Buffer.from(session.appleId + ":" + session.appPassword).toString("base64"),
-          }
-        : {};
-    const result = await fetch(event.url, {
-      method: "DELETE",
-      headers: {
-        ...(authHeader.Authorization ? { Authorization: authHeader.Authorization } : {}),
-      } as Record<string, string>,
-    });
-    if (!result.ok) {
-      return res.status(500).json({ error: "delete_failed", status: result.status });
-    }
-    // Remove from cache
-    await setCachedEvents(cacheKey, events.filter((e: any) => e.uid !== uid));
-    return res.json({ ok: true });
-  } catch (err) {
-    let message = 'Unknown error';
-    if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
-      message = (err as any).message;
-    } else if (typeof err === 'string') {
-      message = err;
-    }
-    return res.status(500).json({ error: 'Failed to delete iCloud event', details: message });
-  }
-});
-
-export default router;
-
-// --- Google helper (local minimal) ---
-function buildGoogleClient() {
-  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = process.env;
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
-    throw new Error("Missing Google OAuth env vars");
-  }
-  return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
-}
+export { router };

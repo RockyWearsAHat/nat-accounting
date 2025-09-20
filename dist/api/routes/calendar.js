@@ -124,6 +124,20 @@ router.post("/schedule", async (req, res) => {
                     body: icsString,
                 });
                 console.log('[icloud][create] createObject result:', result);
+                // Invalidate day and week cache for this date
+                const { invalidateCache, createCacheKey } = await import("../cache.js");
+                const eventDate = mountainStart.toISODate();
+                if (eventDate) {
+                    // Invalidate day cache
+                    await invalidateCache(createCacheKey("icloud", "day", eventDate));
+                }
+                // Invalidate week cache (for any week containing this date)
+                // Find week start/end (Sunday-Saturday)
+                const weekStart = mountainStart.startOf('week').toISODate();
+                const weekEnd = mountainStart.endOf('week').toISODate();
+                if (weekStart && weekEnd) {
+                    await invalidateCache(createCacheKey("icloud", "week", weekStart, weekEnd));
+                }
                 return res.json({ success: true, result });
             }
             catch (err) {

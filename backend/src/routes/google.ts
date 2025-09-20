@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth";
 import { google } from "googleapis";
-import { User } from "../models/User.js";
-import { getCachedEvents, setCachedEvents, createCacheKey } from "../cache.js";
-import { connect as connectMongo, CalendarConfigModel } from "../mongo.js";
+import { User } from "../models/User";
+import { getCachedEvents, setCachedEvents, createCacheKey } from "../cache";
+import { connect as connectMongo, CalendarConfigModel } from "../mongo";
 
 const router = Router();
 router.use(requireAuth);
@@ -197,6 +197,8 @@ router.get("/week", requireAdmin, async (req, res) => {
             uid: e.id,
             calendar: (calListResp.data.items || []).find(ci=> ci.id===calId)?.summary || calId,
             calendarUrl: `google://${calId}`,
+            calendarId: calId,
+            calendarSource: 'google',
             blocking: busyCalendars.length ? busyCalendars.includes(`google://${calId}`) : true,
             color: undefined,
           });
@@ -213,4 +215,4 @@ router.get("/week", requireAdmin, async (req, res) => {
   }
 });
 
-export default router;
+export { router };

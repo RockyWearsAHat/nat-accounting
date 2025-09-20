@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
-import { connect as connectMongo, SiteSettingsModel } from "../mongo.js";
+import { requireAuth } from "../middleware/auth";
+import { connect as connectMongo, SiteSettingsModel } from "../mongo";
 
 const router = Router();
 router.use(requireAuth); // all settings routes require authenticated user
@@ -85,4 +85,4 @@ router.get("/timezones", (_req, res) => {
   res.json({ ok: true, timezones: commonTimezones });
 });
 
-export default router;
+export { router };

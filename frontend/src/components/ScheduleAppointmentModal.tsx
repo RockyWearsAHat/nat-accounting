@@ -142,7 +142,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
   if (!open) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="schedule-modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflow: 'auto', minWidth: 600, width: 'min(90vw, 800px)' }}>
+      <div className="schedule-modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflow: 'auto', minWidth: 700, maxWidth: 900, width: 'min(95vw, 900px)' }}>
         <h2 style={{ marginBottom: 16 }}>Schedule Appointment</h2>
         <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
           {/* Left column: Info */}
@@ -221,7 +221,11 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
               <div>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>Available Timeslots:</div>
                 <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8, padding: 8, background: '#fafbfc', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {slots.map(slot => {
+                  {slots.filter(slot => {
+                    // Only show slots that start in the future (not in the past)
+                    const slotStart = DateTime.fromISO(slot.start, { zone: TIMEZONE });
+                    return slotStart > DateTime.now().setZone(TIMEZONE);
+                  }).map(slot => {
                     const slotStart = DateTime.fromISO(slot.start, { zone: TIMEZONE });
                     const slotEnd = DateTime.fromISO(slot.end, { zone: TIMEZONE });
                     return (

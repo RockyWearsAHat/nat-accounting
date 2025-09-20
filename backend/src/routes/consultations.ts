@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth";
 import { z } from "zod";
-import { buildEstimate } from "../estimation.js";
-import { ConsultationModel } from "../mongo.js";
+import { buildEstimate } from "../estimation";
+import { ConsultationModel } from "../mongo";
 import { randomUUID } from "crypto";
-import type { ConsultationRequest, ConsultationStored } from "../types.js";
+import type { ConsultationRequest, ConsultationStored } from "../types";
 
 const router = Router();
 
@@ -87,4 +87,4 @@ router.get("/admin", requireAuth, async (req, res) => {
   res.json({ count: list.length, consultations: list });
 });
 
-export default router;
+export { router };
