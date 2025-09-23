@@ -73,6 +73,10 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const [showQuickSchedule, setShowQuickSchedule] = useState(false);
   const [quickScheduleDate, setQuickScheduleDate] = useState<Date | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
+  // Hover state for connected overlapping events
+  const [hoveredEventGroup, setHoveredEventGroup] = useState<string | null>(null);
+  const [hoverType, setHoverType] = useState<'full-group' | 'overlap-only' | null>(null);
+  const [hoveredEventIndex, setHoveredEventIndex] = useState<number | null>(null);
 
   // (removed erroneous duplicate imports)
 
@@ -203,7 +207,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     string,
     (CalendarEvent & { __top: number; __height: number; __lane: number; __baseColor?: string; __startMinutes:number; __durationMinutes:number })[]
   > = {};
-  const overlapSlices: Record<string, { startMinutes:number; durationMinutes:number; colors:[string,string]; titles:[string,string]; label:string; topRounded:boolean; bottomRounded:boolean; aIndex:number; bIndex:number }[]> = {};
+  const overlapSlices: Record<string, { startMinutes:number; durationMinutes:number; colors:[string,string]; titles:[string,string]; label:string; topRounded:boolean; bottomRounded:boolean; aIndex:number; bIndex:number; groupId:string }[]> = {};
   // --- Date parsing helpers for calendar display ---
   // The backend normalizes timestamps to .000Z format, but they represent local Mountain Time
   function getDateParts(dateISO: string) {
@@ -435,6 +439,8 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         const labelCandidate = aFull && !bFull ? a.summary : bFull && !aFull ? b.summary : (a.__durationMinutes <= b.__durationMinutes ? a.summary : b.summary);
         const topRounded = (aStart === oStart && bStart === oStart);
         const bottomRounded = (aEnd === oEnd && bEnd === oEnd);
+        // Generate a unique group ID for connected overlapping events
+        const groupId = `${key}-${a.uid}-${b.uid}`;
         overlapSlices[key].push({
           startMinutes: oStart,
           durationMinutes: duration,
@@ -444,7 +450,8 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
             topRounded,
             bottomRounded,
             aIndex:i,
-            bIndex:j
+            bIndex:j,
+            groupId
         });
         // mark full overlap events so we can hide their internal content
         if (aFull) (a as any).__fullOverlap = true;
@@ -608,15 +615,49 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                     const eventB = eventsByDay[dateKey][s.bIndex];
                     const colorA = eventA.__baseColor || '#3aa7e7';
                     const colorB = eventB.__baseColor || '#2ecc71';
+                    
+                    // Check hover state - only highlight if this specific overlap is hovered (overlap-only mode)
+                    const isOverlapHovered = hoveredEventGroup === s.groupId && hoverType === 'overlap-only';
+                    // Check if part of full group hover from regular event
+                    const isPartOfGroupHover = hoveredEventGroup === s.groupId && hoverType === 'full-group';
+                    
+                    // Selective color brightening based on which specific event is hovered
+                    let brighterColorA = colorA;
+                    let brighterColorB = colorB;
+                    
+                    if (isOverlapHovered) {
+                      // Both colors brighten when overlap itself is hovered
+                      brighterColorA = `color-mix(in srgb, ${colorA} 85%, white 15%)`;
+                      brighterColorB = `color-mix(in srgb, ${colorB} 85%, white 15%)`;
+                    } else if (isPartOfGroupHover) {
+                      // Only brighten the color of the hovered event
+                      if (hoveredEventIndex === s.aIndex) {
+                        brighterColorA = `color-mix(in srgb, ${colorA} 85%, white 15%)`;
+                      } else if (hoveredEventIndex === s.bIndex) {
+                        brighterColorB = `color-mix(in srgb, ${colorB} 85%, white 15%)`;
+                      }
+                    }
+                    
                     return (
                       <div 
                         key={i} 
-                        className={`${styles.overlapEvent} ${s.topRounded ? styles.roundedTop : ''} ${s.bottomRounded ? styles.roundedBottom : ''}`}
+                        className={`${styles.overlapEvent} ${(s.topRounded && isOverlapHovered) ? styles.roundedTop : ''} ${(s.bottomRounded && isOverlapHovered) ? styles.roundedBottom : ''} ${isPartOfGroupHover ? styles.hoveredGroup : ''}`}
                         style={{
                           top: `calc(${s.startMinutes} * (var(--hour-height)/60))`,
                           height: `calc(${s.durationMinutes} * (var(--hour-height)/60))`,
-                          background: `repeating-linear-gradient(-45deg, ${colorA} 0 8px, ${colorB} 8px 16px)`,
-                          cursor: 'pointer'
+                          background: `repeating-linear-gradient(-45deg, ${brighterColorA} 0 8px, ${brighterColorB} 8px 16px)`,
+                          cursor: 'pointer',
+                          boxShadow: isOverlapHovered ? '0 2px 8px rgba(0,0,0,0.3)' : 'none'
+                        }}
+                        onMouseEnter={() => {
+                          setHoveredEventGroup(s.groupId);
+                          setHoverType('overlap-only');
+                          setHoveredEventIndex(null); // Clear specific event index for overlap hover
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredEventGroup(null);
+                          setHoverType(null);
+                          setHoveredEventIndex(null);
                         }}
                         onClick={() => setOverlapEvents([eventA, eventB])}
                       >
@@ -656,17 +697,49 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                     
                     if (hideContent) return null;
                     
+                    // Check if this event participates in any overlap group
+                    const participatesInOverlap = stripes.some(s => 
+                      s.aIndex === i || s.bIndex === i
+                    );
+                    const eventGroupIds = stripes
+                      .filter(s => s.aIndex === i || s.bIndex === i)
+                      .map(s => s.groupId);
+                    const isPartOfHoveredGroup = eventGroupIds.some(id => id === hoveredEventGroup) && hoverType === 'full-group';
+                    
+                    // Brighten color and add hover effect if part of hovered group in full-group mode
+                    const finalEventColor = isPartOfHoveredGroup ? 
+                      `color-mix(in srgb, ${eventColor} 85%, white 15%)` : 
+                      eventColor;
+                    const finalBorderColor = isPartOfHoveredGroup ? 
+                      `color-mix(in srgb, ${shadeColor(eventColor, 20)} 85%, white 15%)` : 
+                      shadeColor(eventColor, 20);
+                    
                     return (
                       <div
                         key={i}
-                        className={`${styles.event} ${small ? styles.eventSmall : ''} ${isOngoing ? styles.eventOngoing : ''}`}
+                        className={`${styles.event} ${small ? styles.eventSmall : ''} ${isOngoing ? styles.eventOngoing : ''} ${isPartOfHoveredGroup ? styles.hoveredGroup : ''}`}
                         style={{
                           top: `calc(${ev.__startMinutes} * (var(--hour-height) / 60))`,
                           height: `calc(${ev.__durationMinutes} * (var(--hour-height) / 60))`,
-                          backgroundColor: eventColor,
-                          borderColor: shadeColor(eventColor, 20)
+                          backgroundColor: finalEventColor,
+                          borderColor: finalBorderColor,
+                          boxShadow: isPartOfHoveredGroup ? '0 2px 8px rgba(0,0,0,0.3)' : 'none'
                         }}
                         title={`${ev.summary}\n${startDisplayTime}${endDisplayTime ? ` - ${endDisplayTime}` : ''}`}
+                        onMouseEnter={() => {
+                          if (participatesInOverlap && eventGroupIds.length > 0) {
+                            setHoveredEventGroup(eventGroupIds[0]); // Use first group if multiple
+                            setHoverType('full-group'); // This triggers full group hover
+                            setHoveredEventIndex(i); // Track which specific event is hovered
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (participatesInOverlap) {
+                            setHoveredEventGroup(null);
+                            setHoverType(null);
+                            setHoveredEventIndex(null);
+                          }
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedEvent(ev);

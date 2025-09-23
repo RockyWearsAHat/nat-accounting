@@ -504,6 +504,14 @@
 	border-bottom: 1px solid rgba(255,255,255,0.3);
 }
 
+.hoveredGroup {
+	/* Unified hover effect for connected events */
+	border-left: 1px solid rgba(255,255,255,0.4) !important;
+	border-right: 1px solid rgba(255,255,255,0.4) !important;
+	/* Remove individual shadows - will be handled by unified shadow */
+	box-shadow: none !important;
+}
+
 .overlapLabel {
 	font-size: 11px;
 	font-weight: 600;
