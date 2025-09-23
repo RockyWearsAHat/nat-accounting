@@ -2,7 +2,7 @@ import { Router } from "express";
 import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
-import { listMeetings } from "../scheduling.js";
+import { listMeetings } from "../scheduling";
 const router = Router();
 router.get("/", async (req, res) => {
     const dateStr = req.query.date;
@@ -110,4 +110,4 @@ router.get("/", async (req, res) => {
         closeMinutes,
     });
 });
-export default router;
+export { router };

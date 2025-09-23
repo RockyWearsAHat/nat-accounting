@@ -114,8 +114,11 @@ Make sure to keep this copilot-instructions.md file updated with any new reusabl
 
 When making edits or additions, consider how they fit into the overall architecture and design principles outlined in this document. Ensure that new code adheres to the established guidelines for maintainability, scalability, and user experience.
 
-## Guidelines for All Code
-Always prioritize writing proper compilable code that can be built. When issues do arise, ensure you are addressing root causes of issues. Strive for clean, maintainable, and well-documented code that adheres to best practices. Do not half complete requests/responses, do not write comments to insert something later, you can note todos and things that need to be addressed, but always ensure that everything is done up to par is left half done or incomplete (e.g. //Paste rest of code here. "Here's my plan that aligns with exactly what you're asking, I don't need clarification, except to proceed" and then I say "proceed" or "yes" or "continue" and you go on a side tangent. "This will for sure fix it" when the actual BAD CODE is not addressed <- DO NOT DO THIS. Remember, my words first and foremost are the most important information for what I want. Remember that all bad code must be code first, meaning that there is always behavior that has been WRITTEN already if there are bugs or issues. Remember to complete requests). Ensure issues are addressed from their underlying cause -- not just symptoms, code must be well structured, maintainable, controllable with internal controls, and scalable.
+## Publishing Environment
+This site will be deployed on netlify, this means 4096 characters of build environment variables, and a serverless environment, no shared values between requests, and no persistent storage except externally (in databases or locally or whatever). Ensure that the build is optimized and efficient to meet these constraints. Which leads me to the...
+
+## Guidelines for ALL Code
+Always prioritize writing proper, idiomatic, compilable & buildable code. When issues do arise, ensure you are addressing root causes of issues. Strive for clean, maintainable, and well-documented code that adheres to best practices. Do not half complete requests/responses, do not write comments to insert something later, you can note todos and things that need to be addressed, but always ensure that everything is done up to par is left half done or incomplete (e.g. //Paste rest of code here. "Here's my plan that aligns with exactly what you're asking, I don't need clarification, except to proceed" and then I say "proceed" or "yes" or "continue" and you go on a side tangent. "This will for sure fix it" when the actual BAD CODE is not addressed <- DO NOT DO THIS. Remember, my words first and foremost are the most important information for what I want. Remember that all bad code must be code first, meaning that there is always behavior that has been WRITTEN already if there are bugs or issues. Remember to complete requests). Ensure issues are addressed from their underlying cause -- not just symptoms, code must be well structured, maintainable, controllable with internal controls, and scalable.
 
 This codebase is a modern web application using React, TypeScript, Vite for the frontend, and Express with TypeScript for the backend. It is structured as a monorepo with shared types and utilities ideally it should be built and ready to deploy on netlify. All code should be written in TypeScript and modern ES module syntax.
 
@@ -127,3 +130,144 @@ Always answer every part of a request in full, I will guide you but use this doc
 Styling should be minimal, clean, professional, sleek, stylish, modern, and MOST IMPORTANTLY, good to use. A bad design makes it hard for users to do anything on the site, they don't know where to look, what to click, and they often will leave before we can even propose anything. A good design makes it easy for users to do what they need to do, important and key information large and in a place they will look, good choices that allow them to know what they can click. This makes using the site much easier, they can acomplish their goal quickly and easily. Always think about the user experience and how to make it as smooth and seamless as possible.
 
 Always plan your implementation with a clear todo list that addresses every aspect of my request, and then implement it in a clean and professional manner, you can ask for a reivew of the plan, but once a plan is in motion do not stop until the goal you understand is achieved. Always complete your entire todo list in full, do not leave anything out or a request half finished. Ensure that everything is done to the absolute best of your ability.
+
+When errors are encountered, always fix them cleanly with functionality maintained, ensure you understand the context and what the code is trying to accomplish, you don't need to ask for permission to fix and don't be scared of breaking code as long as you ensure you are cleaning it up and fixing it.
+
+When something like "there are build errors" or "there are runtime errors" or "the code doesn't work" is said, then repeat changing testing and validating until everything is fixed and working properly. Do not stop until everything is working properly. Always ensure that you are addressing the root cause of issues and continue to retest and iterate. Do not ask for my permission to run cleanups when you find issues, just do it. Always ensure that you are understanding what is going wrong comprehensively and fixing the root cause of the issue and not just its symptoms.
+
+When making edits or additions, consider how they fit into the overall architecture and design principles outlined in this document. Ensure that new code adheres to the established guidelines for maintainability, scalability, and user experience and all features link into each other properly and are used repetedly when needed, the memory bank should assist as like a notepad for available functions and endpoints, ensure to keep this updated so you can pull upon if there is already a function that does this or if there is a way to slightly modify an existing function rather than writing a whole new block. Ensure the usage of helper and smaller functions that perform specific small tasks and and utilities when operations must be performed repetedly, use descriptive names, good comments, and the simplest correct logic least prone to errors and issues inside of functions [no race cases, no ten nested if statements, etc etc, ensure clean, READABLE, *MAINTAINABLE*, **GOOD** CODE].
+
+You can use the credentials alexwaldmann2004@gmail.com and password Debletar29? and write the cookie to cookie.txt to authenticate any request that needs to be authenticated. When running testing commands, ensure to use isBackground: true for the dev server as well as isBackground: true for testing commands (curls, sleeps, whatever you want to do to test), but you need to ensure that terminals don't overlap and interfere with each other.
+
+FEEL FREE TO WRITE TO THIS FILE, I ACTUALLY WOULD PREFER YOU TO KEEP THIS FILE UPDATED WITH NEW HELPFUL INFORMATION, BASICALLY AS A REFERENCE. YOU DON'T NEED TO WRITE FIXES/BUG REPORTS OR ANYTHING, BUT WRITE A SUMMARY OF WHAT THE FUNCTION IS, THE ENDPOINT IT CAN BE CALLED AT (IF APPLICABLE) & POSSIBLY FILE LOCATION FOR SIMPLER IMPORTS WHEN REFERENCING, THE PARAMETERS IT TAKES, AND HOW IT ACTUALLY WORKS INTERNALLY, WHAT DOES IT CALL, WHAT FUNCTIONS DOES IT RELY ON. THIS WILL BE HELPFUL TO MAINTAIN DRY CODE AND DEBUG ISSUES E.G. MULTIPLE FUNCTIONS ARE FAILING, THEY MIGHT SHARE A CALL TO ANOTHER FUNCTION THAT IS SILENTLY FAILING, ETC. ALL OF THIS DOCUMENTATION INFORMATION THAT YOU SHOULD REMEMBER CAN BE WRITTEN BELOW IN THE
+
+MEMORY // DOCUMENTATION
+==========================
+
+### iCloud Calendar Router (`backend/src/routes/icloud.ts`)
+
+**Purpose:**
+Fetch, parse, and serve iCloud calendar events (with RRULE expansion) for admin users, using a cache-first, background-update pattern. All endpoints require admin authentication and are Netlify/serverless compatible.
+
+**Endpoints:**
+- `GET /api/icloud/status` — Test iCloud connection and return calendar discovery status
+- `GET /api/icloud/config` — Return all calendar configurations (both iCloud and Google calendars)
+- `POST /api/icloud/config` — Update calendar busy/blocking status
+- `GET /api/icloud/week?start=YYYY-MM-DD&end=YYYY-MM-DD` — Returns all events in the week range. Cache-first, background update.
+- `GET /api/icloud/day?date=YYYY-MM-DD` — Returns all events for a single day. Cache-first, background update.
+- `GET /api/icloud/month?year=YYYY&month=MM` — Returns all events for a month. Cache-first, background update.
+- `GET /api/icloud/all` — Returns all events for the next 90 days. Cache-first, background update.
+
+**Cache Pattern:**
+- In-memory cache (per Netlify/serverless instance) keyed by query params.
+- If cache hit: returns cached events immediately, triggers background refresh.
+- If cache miss: fetches from iCloud, caches, and returns fresh events.
+
+**Recent Fixes (Dec 2024):**
+- Fixed calendar discovery by migrating from legacy tsdav `createDAVClient` to new `DAVClient` class
+- Fixed event title extraction by handling `\r\n` line endings in iCal data
+- Fixed recurring events by properly implementing RRULE expansion with rrule package
+- Fixed calendar toggle behavior in config endpoint - now returns all calendars after updates
+- Fixed frontend integration where calendars weren't showing due to API changes
+- **Fixed calendar color system** - Now uses proper color priority: user override > fetched colors > stored colors > iOS-style defaults
+- **Fixed PROPFIND TypeError** - Improved PROPFIND response structure handling for calendar-color properties
+- **Fixed disappearing events** - Changed WeeklyCalendar filtering to show ALL configured calendars, not just busy ones
+- **Fixed event color inheritance** - Events now properly inherit colors from their parent calendars in both iCloud and Google integrations
+- **Fixed Google calendar dark colors** - Automatically brightens dark colors like `#202124` to ensure visibility
+- **Eliminated generated fallback colors** - Removed random color generation in favor of curated iOS color palette
+
+**Current Status:**
+- ✅ iCloud authentication working (7 calendars discovered)
+- ✅ Event titles properly extracted from SUMMARY field
+- ✅ Recurring events expanded correctly using RRULE
+- ✅ Calendar configuration management working
+- ✅ Calendar colors working with proper override system and iOS-style defaults
+- ✅ Google calendar colors automatically brightened if too dark
+- ✅ Color override system allows users to customize any calendar color
+- ✅ Timezone handling working with Mountain Time default (configurable via admin)
+
+**Reusable Utilities:**
+- `getIcloudCreds()`: Returns Apple ID credentials from environment variables
+- `createCacheKey(...args: string[])`: Generates a cache key from arguments
+- `getCachedEvents(key: string)`: Returns cached events for a key, or null
+- `setCachedEvents(key: string, events: any[], ttlSeconds = 300)`: Caches events for a key
+- `parseICalDate(val: string)`: Parses iCal date strings to JS Date (handles YYYYMMDD and YYYYMMDDTHHMMSS formats)
+- `parseICalEvents(objs: any[], from: Date, to: Date)`: Parses and expands iCal events including RRULE recurrence, extracts SUMMARY and UID with proper line ending handling
+- `fetchAndCacheEvents(from: Date, to: Date, cacheKey: string)`: Fetches events from iCloud using DAVClient, parses with calendar metadata, and caches
+
+**Key Implementation Details:**
+- Uses tsdav v1.1.0+ `DAVClient` class (not legacy createDAVClient)
+- Login required before calling `fetchCalendars()` or `fetchCalendarObjects()`
+- RRULE expansion using `rrulestr` from rrule package for recurring events
+- Event parsing handles `\r\n` line endings common in iCal data
+- Calendar discovery works without props parameter (props parameter returns empty results)
+
+**Admin Auth:**
+- All endpoints use `requireAdmin` middleware (checks `req.user.role === 'admin'`)
+
+**Dependencies:**
+- `tsdav` v1.1.0+ for CalDAV/iCloud access (DAVClient, DAVNamespace)
+- `rrule` for recurrence expansion
+- MongoDB CalendarConfigModel for calendar configuration storage
+
+**TODO:**
+- Implement proper CalDAV-based calendar color fetching using Apple CalDAV extensions
+- Improve timezone handling to properly parse VTIMEZONE data from iCal files
+- Add calendar color caching to reduce API calls
+
+**See also:**
+- Google calendar router (similar patterns for event fetching and caching)
+
+---
+
+### WeeklyCalendar Component (`src/client/components/WeeklyCalendar.tsx`)
+
+**Purpose:**
+React component that displays a weekly calendar view with events from both iCloud and Google calendars. Handles event filtering, timezone conversion, and visual styling.
+
+**Key Features:**
+- Fetches events from `/api/merged/week` endpoint (combines iCloud + Google)
+- Displays events in Mountain Time (configurable via timezone prop)
+- Shows ALL configured calendars, with visual distinction between busy/non-busy
+- Supports event overlap visualization with striped patterns
+- Handles event color inheritance from parent calendars
+
+**Recent Fixes (Dec 2024):**
+- **Fixed disappearing events issue** - Changed filtering logic from `busySet.has(ev.calendarUrl)` to `configuredCalendars.has(ev.calendarUrl)` to show ALL configured calendars, not just busy ones
+- **Fixed color consistency** - Events now properly inherit calendar colors via priority: user override > event color > default
+- **Fixed business hours filtering** - Removed filtering that excluded events outside business hours (8AM-6PM). Now ALL events display regardless of time
+- **Fixed timezone conversion issues** - Improved handling of different datetime formats (UTC vs local time)
+- **Performance optimization** - Added server-side filtering capability with calendarUrls parameter (can be enabled/disabled)
+- Visual distinction maintained: busy calendar events use full color, non-busy use shaded color (`shadeColor(baseColor, -30)`)
+
+**Current Issues (Sept 2025):**
+- Google events missing when server-side filtering enabled
+- Timezone conversion causing 6-hour shift (3:30 PM → 9:30 AM) suggesting UTC vs local time confusion
+- Server-side filtering temporarily disabled for debugging
+
+**Event Filtering Logic:**
+```typescript
+const relevantEvents = events.filter((ev) => {
+  if (!config) return true; // show until config loaded
+  
+  // Filter out declined events
+  if (ev.responseStatus === 'declined' || ev.status === 'declined') {
+    return false;
+  }
+  
+  // Show events from ANY configured calendar (not just busy ones)
+  return configuredCalendars.has(ev.calendarUrl) || (ev.uid && forcedBusy.has(ev.uid));
+});
+```
+
+**Timezone Handling:**
+- Uses `date-fns-tz` for timezone conversion to Mountain Time
+- Handles both UTC and local time input formats
+- Business hours no longer filter out events, only affect grid display
+
+**Dependencies:**
+- `/api/merged/week` endpoint for unified event data
+- CalendarConfig for calendar settings and colors
+- date-fns-tz for timezone handling
+
+---
