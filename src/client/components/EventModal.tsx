@@ -40,23 +40,20 @@ export const EventModal: React.FC<EventModalProps> = ({ event, config, onClose }
     <div className={styles['modal-overlay']} onClick={onClose}>
       <div className={styles['day-modal']} onClick={e => e.stopPropagation()}>
         <div className={styles['modal-header']}>
-          <h3>{event.summary}</h3>
+          <h3 style={{ color: color, margin: 0, fontSize: 18, fontWeight: 600 }}>{event.summary}</h3>
           <button onClick={onClose} className={styles['close-btn']}>
             ×
           </button>
         </div>
         <div className={styles['modal-content']}>
-          <div style={{ marginBottom: 12, color: color, fontWeight: 600 }}>
+          <div style={{ marginBottom: 12, color: '#fff', fontWeight: 400 }}>
             {startParts.month}/{startParts.day}/{startParts.year} {String(startParts.hour % 12 || 12).padStart(2, '0')}:{String(startParts.minute).padStart(2, '0')} {startParts.hour >= 12 ? 'PM' : 'AM'}
             {endParts && (
               <> – {String(endParts.hour % 12 || 12).padStart(2, '0')}:{String(endParts.minute).padStart(2, '0')} {endParts.hour >= 12 ? 'PM' : 'AM'}</>
             )}
           </div>
-          <div style={{ fontSize: 14, color: '#b0b0c3', marginBottom: 8 }}>{event.calendar}</div>
+          <div style={{ fontSize: 14, color: color, fontWeight: 600, marginBottom: 8 }}>{event.calendar}</div>
           {/* No description/location fields in CalendarEvent type */}
-        </div>
-        <div style={{ marginTop: 18 }}>
-          <button className={styles['close-btn']} onClick={onClose} style={{ fontSize: 18, padding: '6px 18px', background: '#23232a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Close</button>
         </div>
       </div>
     </div>

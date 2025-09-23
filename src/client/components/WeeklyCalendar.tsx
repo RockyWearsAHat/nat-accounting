@@ -5,6 +5,7 @@ import { CalendarEvent, CalendarConfig } from "../types/calendar";
 import { DayEventsModal } from "./DayEventsModal";
 import { ScheduleAppointmentModal } from "./ScheduleAppointmentModal";
 import { EventModal } from "./EventModal";
+import { OverlapModal } from "./OverlapModal";
 import styles from "./calendar.module.css";
 
 interface WeeklyCalendarProps {
@@ -67,6 +68,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   // Remove selectedDayEvents state, use week cache
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [overlapEvents, setOverlapEvents] = useState<CalendarEvent[] | null>(null);
   const [dayModalLoading, setDayModalLoading] = useState(false);
   const [showQuickSchedule, setShowQuickSchedule] = useState(false);
   const [quickScheduleDate, setQuickScheduleDate] = useState<Date | null>(null);
@@ -613,8 +615,10 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                         style={{
                           top: `calc(${s.startMinutes} * (var(--hour-height)/60))`,
                           height: `calc(${s.durationMinutes} * (var(--hour-height)/60))`,
-                          background: `repeating-linear-gradient(45deg, ${colorA} 0 8px, ${colorB} 8px 16px)`
+                          background: `repeating-linear-gradient(-45deg, ${colorA} 0 8px, ${colorB} 8px 16px)`,
+                          cursor: 'pointer'
                         }}
+                        onClick={() => setOverlapEvents([eventA, eventB])}
                       >
                         <span className={styles.overlapLabel}>{s.label}</span>
                       </div>
@@ -725,6 +729,17 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
           event={selectedEvent}
           config={config}
           onClose={() => setSelectedEvent(null)}
+        />
+      )}
+      {overlapEvents !== null && (
+        <OverlapModal
+          events={overlapEvents}
+          config={config}
+          onClose={() => setOverlapEvents(null)}
+          onEventSelect={(event) => {
+            setOverlapEvents(null);
+            setSelectedEvent(event);
+          }}
         />
       )}
       {showQuickSchedule && quickScheduleDate && (
