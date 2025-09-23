@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import dayjs from "dayjs";
-import { isSlotAvailable, scheduleMeeting, listMeetings, cancelMeeting, } from "../scheduling.js";
+import { isSlotAvailable, scheduleMeeting, listMeetings, cancelMeeting, } from "../scheduling";
 const router = Router();
 const bodySchema = z.object({
     consultationId: z.string().uuid(),
@@ -40,4 +40,4 @@ router.post("/:id/cancel", (req, res) => {
         return res.status(404).json({ error: "not_found" });
     res.json({ ok: true });
 });
-export default router;
+export { router };
