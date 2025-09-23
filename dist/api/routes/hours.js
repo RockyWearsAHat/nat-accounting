@@ -55,4 +55,4 @@ router.get("/", (_req, res) => {
         res.status(500).json({ error: "failed_to_read_hours" });
     }
 });
-export default router;
+export { router };

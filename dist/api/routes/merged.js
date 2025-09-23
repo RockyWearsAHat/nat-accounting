@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth";
 // Merged events endpoint that pulls from iCloud and Google week endpoints and returns a unified list.
 // This avoids duplicating the complex expansion / filtering logic already implemented in the
 // individual source routes by delegating to their HTTP endpoints (which are cached already).
@@ -22,10 +22,6 @@ function requireAdmin(req, res, next) {
 }
 function parseDateParam(v) {
     return /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v) ? v : null;
-}
-// Helper to build internal base URL (supports deployment override)
-function internalBase() {
-    return process.env.INTERNAL_API_BASE || `http://127.0.0.1:${process.env.PORT || 4000}`;
 }
 router.get("/week", requireAdmin, async (req, res) => {
     const startStr = parseDateParam(String(req.query.start || ""));
@@ -51,13 +47,14 @@ router.get("/week", requireAdmin, async (req, res) => {
     // Forward auth cookies (session) if present
     if (req.headers.cookie)
         headers["cookie"] = req.headers.cookie;
-    const base = internalBase();
+    // Use absolute URLs for internal fetches (Node.js fetch does not resolve relative URLs)
     const sourceCounts = {};
     const events = [];
     const fetches = [];
     async function pull(source, urlPath) {
         try {
-            const url = `${base}${urlPath}?start=${startStr}&end=${endStr}`;
+            const baseUrl = `${req.protocol}://${req.get('host')}`;
+            const url = `${baseUrl}${urlPath}?start=${startStr}&end=${endStr}`;
             const r = await globalThis.fetch(url, { headers });
             if (!r.ok) {
                 console.warn(`[merged] ${source} fetch failed status=${r.status}`);
@@ -109,4 +106,4 @@ router.get("/week", requireAdmin, async (req, res) => {
         },
     });
 });
-export default router;
+export { router };

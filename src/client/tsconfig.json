@@ -1,0 +1,28 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["vite/client"],
+    "composite": true
+  },
+  "include": [
+    "./**/*"
+  ],
+  "exclude": [
+    "../../dist",
+    "../../node_modules"
+  ]
+}

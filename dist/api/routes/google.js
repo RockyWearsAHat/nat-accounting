@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth";
 import { google } from "googleapis";
-import { User } from "../models/User.js";
-import { getCachedEvents, setCachedEvents, createCacheKey } from "../cache.js";
-import { connect as connectMongo, CalendarConfigModel } from "../mongo.js";
+import { User } from "../models/User";
+import { getCachedEvents, setCachedEvents, createCacheKey } from "../cache";
+import { connect as connectMongo, CalendarConfigModel } from "../mongo";
 const router = Router();
 router.use(requireAuth);
 function requireAdmin(req, res, next) {
@@ -139,7 +139,7 @@ async function getAuthorizedClient(userId) {
     client.setCredentials(creds);
     return client;
 }
-export function buildClient() {
+function buildClient() {
     const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = process.env;
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
         throw new Error("Missing Google OAuth env vars");
@@ -159,10 +159,8 @@ router.get("/week", requireAdmin, async (req, res) => {
     const to = new Date(ey, em - 1, ed, 23, 59, 59, 999);
     const cacheKey = createCacheKey("google", "week", startStr, endStr, req.user.id);
     const cached = await getCachedEvents(cacheKey);
-    if (cached) {
-        console.log("[google] /week cache hit", { count: cached.length });
+    if (cached)
         return res.json({ range: { start: from.toISOString(), end: to.toISOString() }, events: cached, cached: true });
-    }
     const client = await getAuthorizedClient(req.user.id);
     if (!client) {
         console.warn("[google] week request without authorized client (no tokens)");
@@ -183,12 +181,10 @@ router.get("/week", requireAdmin, async (req, res) => {
         }
         if (!targetGoogleCals.length)
             targetGoogleCals = allGoogleCals.map(id => `google://${id}`);
-        console.log("[google] /week fetching for calendars", targetGoogleCals);
         const events = [];
         for (const calUrl of targetGoogleCals) {
             const calId = calUrl.replace(/^google:\/\//, "");
             try {
-                console.log("[google] /week fetching events for", calId);
                 const resp = await calendar.events.list({
                     calendarId: calId,
                     timeMin: from.toISOString(),
@@ -197,7 +193,6 @@ router.get("/week", requireAdmin, async (req, res) => {
                     orderBy: "startTime",
                     maxResults: 500,
                 });
-                console.log("[google] /week fetched", (resp.data.items || []).length, "events for", calId);
                 for (const e of resp.data.items || []) {
                     const start = e.start?.dateTime || (e.start?.date ? e.start.date + "T00:00:00Z" : undefined);
                     const end = e.end?.dateTime || (e.end?.date ? e.end.date + "T23:59:00Z" : undefined);
@@ -210,6 +205,8 @@ router.get("/week", requireAdmin, async (req, res) => {
                         uid: e.id,
                         calendar: (calListResp.data.items || []).find(ci => ci.id === calId)?.summary || calId,
                         calendarUrl: `google://${calId}`,
+                        calendarId: calId,
+                        calendarSource: 'google',
                         blocking: busyCalendars.length ? busyCalendars.includes(`google://${calId}`) : true,
                         color: undefined,
                     });
@@ -220,7 +217,6 @@ router.get("/week", requireAdmin, async (req, res) => {
             }
         }
         await setCachedEvents(cacheKey, events, 300);
-        console.log("[google] /week returning", events.length, "events");
         res.json({ range: { start: from.toISOString(), end: to.toISOString() }, events, cached: false });
     }
     catch (e) {
@@ -228,4 +224,4 @@ router.get("/week", requireAdmin, async (req, res) => {
         res.status(500).json({ error: "google_events_failed" });
     }
 });
-export default router;
+export { router };

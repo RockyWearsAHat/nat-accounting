@@ -3,6 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "../models/User";
+import { AdminUserModel } from "../models/AdminUser";
 const router = Router();
 const baseRegisterSchema = z.object({
     email: z.string().email(),
@@ -37,11 +38,16 @@ router.post("/login", async (req, res) => {
     if (!parsed.success)
         return res.status(400).json({ error: parsed.error.flatten() });
     const { email, password } = parsed.data;
-    // Try admin first, then client
-    let user = await User.findOne({ email });
+    // Try admin first, then regular user
+    let user = await AdminUserModel.findOne({ email });
+    let passwordField = 'password';
+    if (!user) {
+        user = await User.findOne({ email });
+        passwordField = 'passwordHash';
+    }
     if (!user)
         return res.status(401).json({ error: "invalid_credentials" });
-    const match = await bcrypt.compare(password, user.passwordHash);
+    const match = await bcrypt.compare(password, user[passwordField]);
     if (!match)
         return res.status(401).json({ error: "invalid_credentials" });
     const payload = {
@@ -78,4 +84,4 @@ router.post("/logout", (req, res) => {
     res.clearCookie("token");
     res.json({ ok: true });
 });
-export default router;
+export { router };

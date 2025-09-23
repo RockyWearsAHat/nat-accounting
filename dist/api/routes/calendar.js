@@ -1,8 +1,6 @@
 import { Router } from "express";
 import { getSession, getCalendarsCache } from "../icloudSession";
-// No ical-generator: use minimal ICS string builder
 import { DateTime } from "luxon";
-// ...existing code...
 const router = Router();
 // Clean, robust /schedule endpoint using shared iCloud session/cache state and strict Mountain Time
 router.post("/schedule", async (req, res) => {
@@ -125,7 +123,7 @@ router.post("/schedule", async (req, res) => {
                 });
                 console.log('[icloud][create] createObject result:', result);
                 // Invalidate day and week cache for this date
-                const { invalidateCache, createCacheKey } = await import("../cache.js");
+                const { invalidateCache, createCacheKey } = await import("../cache");
                 const eventDate = mountainStart.toISODate();
                 if (eventDate) {
                     // Invalidate day cache
@@ -167,4 +165,4 @@ router.post("/schedule", async (req, res) => {
     }
 });
 // Removed broken /link endpoint (calendarFeedUrl is not used)
-export default router;
+export { router };
