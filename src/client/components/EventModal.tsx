@@ -35,7 +35,8 @@ export const EventModal: React.FC<EventModalProps> = ({ event, config, onClose }
   
   const startParts = parseEventTime(event.start);
   const endParts = event.end ? parseEventTime(event.end) : null;
-  const color = event.color || (config?.colors?.[event.calendarUrl] ?? "#3aa7e7");
+  // Prioritize user-configured color over event color
+  const color = (config?.colors?.[event.calendarUrl]) || event.color || "#3aa7e7";
   return (
     <div className={styles['modal-overlay']} onClick={onClose}>
       <div className={styles['day-modal']} onClick={e => e.stopPropagation()}>

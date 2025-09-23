@@ -65,7 +65,8 @@ export const OverlapModal: React.FC<OverlapModalProps> = ({ events, config, onCl
           </p>
           
           {events.map((event, i) => {
-            const color = event.color || (config?.colors?.[event.calendarUrl] ?? "#3aa7e7");
+            // Prioritize user-configured color over event color
+            const color = (config?.colors?.[event.calendarUrl]) || event.color || "#3aa7e7";
             return (
               <div 
                 key={i}
