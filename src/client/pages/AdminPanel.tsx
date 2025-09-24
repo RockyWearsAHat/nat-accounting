@@ -166,7 +166,12 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
       </div>
       
       <div className={styles.calendarWrapper}>
-        <WeeklyCalendar config={config} hours={hours} onConfigRefresh={loadConfig} />
+        <WeeklyCalendar 
+          config={config} 
+          hours={hours} 
+          onConfigRefresh={loadConfig}
+          onConsultationUpdate={() => {}} // No consultations in admin panel
+        />
       </div>
       <div className={styles.sectionCard}>
         <h4>Google Calendar Integration</h4>
