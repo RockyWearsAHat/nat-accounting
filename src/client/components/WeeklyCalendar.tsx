@@ -13,7 +13,8 @@ interface WeeklyCalendarProps {
   hours?: {
     [day: string]: { raw: string; startMinutes: number; endMinutes: number };
   } | null;
-  onConfigRefresh?: () => void; // trigger refetch after modal actions
+  onConsultationUpdate: () => void; // trigger refetch after modal actions
+  onConfigRefresh: () => void; // trigger refetch after config changes
 }
 
 export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
@@ -621,33 +622,49 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                     // Check if part of full group hover from regular event
                     const isPartOfGroupHover = hoveredEventGroup === s.groupId && hoverType === 'full-group';
                     
-                    // Selective color brightening based on which specific event is hovered
-                    let brighterColorA = colorA;
-                    let brighterColorB = colorB;
+                    // Create interlocking pattern with selective brightening
+                    let baseColor = colorA; // Background color (eventA)  
+                    let stripeColor = colorB; // Stripe color (eventB)
                     
-                    if (isOverlapHovered) {
-                      // Both colors brighten when overlap itself is hovered
-                      brighterColorA = `color-mix(in srgb, ${colorA} 85%, white 15%)`;
-                      brighterColorB = `color-mix(in srgb, ${colorB} 85%, white 15%)`;
-                    } else if (isPartOfGroupHover) {
-                      // Only brighten the color of the hovered event
+                    // Brighten colors when parent events are hovered OR when overlap itself is hovered
+                    if (isPartOfGroupHover) {
                       if (hoveredEventIndex === s.aIndex) {
-                        brighterColorA = `color-mix(in srgb, ${colorA} 85%, white 15%)`;
+                        // EventA is hovered - brighten background using EXACT same formula as regular events
+                        baseColor = `color-mix(in srgb, ${colorA} 85%, white 15%)`;
                       } else if (hoveredEventIndex === s.bIndex) {
-                        brighterColorB = `color-mix(in srgb, ${colorB} 85%, white 15%)`;
+                        // EventB is hovered - brighten stripes using EXACT same formula as regular events
+                        stripeColor = `color-mix(in srgb, ${colorB} 85%, white 15%)`;
                       }
+                    } else if (isOverlapHovered) {
+                      // When overlap itself is hovered, brighten both colors using EXACT same formula
+                      baseColor = `color-mix(in srgb, ${colorA} 85%, white 15%)`;
+                      stripeColor = `color-mix(in srgb, ${colorB} 85%, white 15%)`;
                     }
+                    
+                    // Apply transform and shadow when parent events OR overlap itself is hovered
+                    const shouldTransform = isPartOfGroupHover || isOverlapHovered;
+                    const transformStyle = shouldTransform ? 'translateY(-1px)' : 'none';
+                    
+                    // Add shadow when overlap is hovered directly for better visual feedback
+                    const shadowStyle = isOverlapHovered ? '0 2px 8px rgba(0,0,0,0.3)' : 'none';
+                    
+                    // Apply brightness filter when parent events are hovered to match regular event hover
+                    const filterStyle = isPartOfGroupHover ? 'brightness(1.1)' : 'none';
                     
                     return (
                       <div 
                         key={i} 
-                        className={`${styles.overlapEvent} ${(s.topRounded && isOverlapHovered) ? styles.roundedTop : ''} ${(s.bottomRounded && isOverlapHovered) ? styles.roundedBottom : ''} ${isPartOfGroupHover ? styles.hoveredGroup : ''}`}
+                        className={`${styles.overlapEvent} ${(s.topRounded) ? styles.roundedTop : ''} ${(s.bottomRounded) ? styles.roundedBottom : ''}`}
                         style={{
                           top: `calc(${s.startMinutes} * (var(--hour-height)/60))`,
                           height: `calc(${s.durationMinutes} * (var(--hour-height)/60))`,
-                          background: `repeating-linear-gradient(-45deg, ${brighterColorA} 0 8px, ${brighterColorB} 8px 16px)`,
-                          cursor: 'pointer',
-                          boxShadow: isOverlapHovered ? '0 2px 8px rgba(0,0,0,0.3)' : 'none'
+                          backgroundColor: baseColor,
+                          backgroundImage: `repeating-linear-gradient(-45deg, ${stripeColor} 0px 4px, ${baseColor} 4px 8px)`,
+                          transform: transformStyle,
+                          boxShadow: shadowStyle,
+                          filter: filterStyle,
+                          transition: 'all 0.15s ease',
+                          cursor: 'pointer'
                         }}
                         onMouseEnter={() => {
                           setHoveredEventGroup(s.groupId);
