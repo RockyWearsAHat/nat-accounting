@@ -116,8 +116,8 @@ export function DayEventsModal(props: DayEventsModalProps) {
   const dayHours = hours?.[dayOfWeek];
   const isToday = dayDate.toDateString() === new Date().toDateString();
 
-  // Use the same hour range logic as WeeklyCalendar - extend to 7am-9pm
-  const startHour = 7;
+  // Use the same hour range logic as WeeklyCalendar - extend to 6am-9pm  
+  const startHour = 6;  // Start from 6am to match weekly view
   const endHour = 21; // 9pm
   const hourRange = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
 
@@ -475,214 +475,293 @@ export function DayEventsModal(props: DayEventsModalProps) {
             </div>
           </div>
 
-          {/* Right: Mini Calendar View */}
+          {/* Right: Day Calendar View - Single day version of WeeklyCalendar */}
           <div style={{ flex: '1', minWidth: 500, display: 'flex', flexDirection: 'column' }}>
-            {/* All-day events section */}
-            {allDayEvents.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '14px', color: '#aaa', marginBottom: '8px' }}>All Day</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {allDayEvents.map((event, index) => {
-                    const userOverrideColor = config?.colors?.[event.calendarUrl];
-                    const baseColor = userOverrideColor || event.color || '#3aa7e7';
-                    const isBusy = busySet.has(event.calendarUrl) || (event.uid && forcedBusySet.has(event.uid));
-                    const eventColor = isBusy ? baseColor : shadeColor(baseColor, -30);
-                    
-                    return (
-                      <div
-                        key={index}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          background: eventColor,
-                          color: '#fff',
-                          fontSize: '13px',
-                          fontWeight: '500',
-                          opacity: isBusy ? 1 : 0.7
-                        }}
-                      >
-                        {event.summary}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Main calendar grid - scrollable from 7am to 9pm */}
-            <div className={styles.calendarGrid} style={{ 
-              flex: '1', 
-              display: 'flex', 
-              maxHeight: '600px',
-              overflow: 'auto',
-              border: '1px solid #23232a',
-              borderRadius: '8px',
-              background: '#121216'
+            
+            {/* All-day events section - single column version with proper styling */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '80px 1fr',
+              minHeight: '36px',
+              borderBottom: '1px solid #1e1e24',
+              background: '#0e0e11',
+              marginBottom: '0',
+              overflow: 'hidden'
             }}>
-              {/* Time column - sticky */}
-              <div className={styles.timeColumn} style={{ 
-                width: '60px', 
-                display: 'flex', 
-                flexDirection: 'column',
-                borderRight: '1px solid #23232a',
-                position: 'sticky',
-                left: 0,
+              <div style={{
                 background: '#121216',
-                zIndex: 10
-              }}>
-                {/* Position time labels to align exactly with grid lines */}
-                {hourRange.map((hour, index) => (
-                  <div
-                    key={hour}
-                    style={{
-                      position: 'absolute',
-                      top: `${index * 60}px`, // Match the grid line position exactly
-                      right: '8px',
-                      fontSize: '12px',
-                      color: '#aaa',
-                      fontWeight: '500',
-                      transform: 'translateY(-6px)', // Center the text on the line
-                      zIndex: 2
-                    }}
-                  >
-                    {formatHour(hour)}
-                  </div>
-                ))}
-                
-                {/* Spacer to maintain height */}
-                <div style={{ height: `${hourRange.length * 60}px` }} />
-              </div>
-
-              {/* Day grid with precise positioning */}
-              <div className={styles.dayGrid} style={{ 
-                flex: '1', 
+                borderRight: '1px solid #1e1e24',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'flex-end',
+                padding: '8px 12px 4px',
+                fontSize: '12px',
+                fontWeight: '600',
                 position: 'relative',
-                minHeight: `${hourRange.length * 60}px`
+                color: '#d1d5db'
               }}>
-                {/* Hour grid lines */}
-                {hourRange.map((hour, index) => (
-                  <div
-                    key={hour}
-                    style={{
-                      position: 'absolute',
-                      top: `${index * 60}px`,
-                      left: '0',
-                      right: '0',
-                      height: '1px',
-                      background: '#23232a',
-                      zIndex: 1
-                    }}
-                  />
-                ))}
-
-                {/* Business hours lines - opening (green) and closing (red) */}
-                {dayHours && (
-                  <>
-                    {/* Opening time - green line */}
-                    {dayHours.startMinutes >= windowStartMinutes && dayHours.startMinutes < windowStartMinutes + daySpanMinutes && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: `${((dayHours.startMinutes - windowStartMinutes) / daySpanMinutes) * (hourRange.length * 60)}px`,
-                          left: '0',
-                          right: '0',
-                          height: '3px',
-                          background: 'linear-gradient(90deg, #4ade80, #22c55e)',
-                          borderRadius: '2px',
-                          zIndex: 5,
-                          boxShadow: '0 0 8px rgba(34, 197, 94, 0.5)'
-                        }}
-                      />
-                    )}
-                    
-                    {/* Closing time - red line */}
-                    {dayHours.endMinutes >= windowStartMinutes && dayHours.endMinutes < windowStartMinutes + daySpanMinutes && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: `${((dayHours.endMinutes - windowStartMinutes) / daySpanMinutes) * (hourRange.length * 60)}px`,
-                          left: '0',
-                          right: '0',
-                          height: '3px',
-                          background: 'linear-gradient(90deg, #ff4e4e, #ff6b6b)',
-                          borderRadius: '2px',
-                          zIndex: 5,
-                          boxShadow: '0 0 8px rgba(255, 78, 78, 0.5)'
-                        }}
-                      />
-                    )}
-                  </>
-                )}
-
-                {/* Current time line */}
-                {isToday && (() => {
-                  const now = new Date();
-                  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-                  if (nowMinutes >= windowStartMinutes && nowMinutes < windowStartMinutes + daySpanMinutes) {
-                    return (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: `${((nowMinutes - windowStartMinutes) / daySpanMinutes) * (hourRange.length * 60)}px`,
-                          left: '0',
-                          right: '0',
-                          height: '2px',
-                          background: 'linear-gradient(90deg, #ff4e4e, #ffb84e)',
-                          borderRadius: '1px',
-                          zIndex: 10,
-                          boxShadow: '0 0 8px rgba(255, 78, 78, 0.5)'
-                        }}
-                      />
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* Events */}
-                {processedEvents.map((event, index) => {
+                <span style={{
+                  position: 'absolute',
+                  left: '0',
+                  width: '56px',
+                  textAlign: 'right',
+                  color: '#7a7a99',
+                  fontSize: '11px'
+                }}>ALL-DAY</span>
+              </div>
+              <div style={{
+                background: '#0e0e11',
+                padding: '4px 6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                minHeight: '28px',
+                borderRight: '1px solid #1e1e24'
+              }}>
+                {allDayEvents.map((event, index) => {
+                  const userOverrideColor = config?.colors?.[event.calendarUrl];
+                  const baseColor = userOverrideColor || event.color || '#3aa7e7';
                   const isBusy = busySet.has(event.calendarUrl) || (event.uid && forcedBusySet.has(event.uid));
-                  const eventColor = isBusy ? event.__baseColor : shadeColor(event.__baseColor || '#3aa7e7', -30);
                   
                   return (
                     <div
                       key={index}
                       style={{
-                        position: 'absolute',
-                        top: `${event.__top * (hourRange.length * 60)}px`,
-                        height: `${Math.max(event.__height * (hourRange.length * 60), 20)}px`,
-                        left: '4px',
-                        right: '4px',
-                        background: eventColor,
-                        color: '#fff',
-                        padding: '4px 8px',
+                        backgroundColor: baseColor,
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
                         borderRadius: '4px',
-                        fontSize: '12px',
+                        padding: '2px 6px',
+                        fontSize: '11px',
                         fontWeight: '500',
-                        overflow: 'hidden',
+                        color: '#ffffff',
+                        textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
                         cursor: 'pointer',
-                        zIndex: 5,
-                        opacity: isBusy ? 1 : 0.7,
-                        border: '1px solid rgba(255,255,255,0.1)'
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                        minHeight: '18px',
+                        lineHeight: '16px',
+                        opacity: isBusy ? 1 : 0.7
                       }}
+                      title={event.summary}
                       onClick={() => setSelectedEvent(event)}
                     >
-                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>
-                        {event.summary}
-                      </div>
-                      <div style={{ fontSize: '11px', opacity: 0.9 }}>
-                        {getDateParts(event.start).hour.toString().padStart(2, '0')}:
-                        {getDateParts(event.start).minute.toString().padStart(2, '0')}
-                        {event.end && (
-                          <>
-                            {' - '}
-                            {getDateParts(event.end).hour.toString().padStart(2, '0')}:
-                            {getDateParts(event.end).minute.toString().padStart(2, '0')}
-                          </>
-                        )}
-                      </div>
+                      {event.summary}
                     </div>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Main calendar grid - scrollable single day view */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '80px 1fr',
+              flex: '1',
+              background: '#0e0e11',
+              overflow: 'hidden',
+              border: 'none',
+              borderRadius: '0'
+            }}>
+              {/* Time column and content - both scroll together */}
+              <div style={{
+                display: 'contents'
+              }}>
+                {/* Scrollable container for both time labels and day content */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '80px 1fr',
+                  gridColumn: '1 / -1',
+                  overflow: 'auto',
+                  maxHeight: '600px',
+                  background: '#0e0e11'
+                }}>
+                  {/* Time column - scrolls with content */}
+                  <div style={{
+                    background: '#121216',
+                    position: 'relative',
+                    fontVariantNumeric: 'tabular-nums',
+                    padding: '0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    width: '80px',
+                    minWidth: '80px',
+                    zIndex: 2
+                  }}>
+                    {hourRange.map(hour => (
+                      <div key={hour} style={{
+                        background: '#121216',
+                        fontSize: '12px',
+                        padding: '8px 12px 0',
+                        height: '80px',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'flex-end',
+                        borderBottom: '1px solid #1e1e24',
+                        fontWeight: '600',
+                        position: 'relative',
+                        color: '#d1d5db'
+                      }}>
+                        <span style={{
+                          position: 'absolute',
+                          left: '0',
+                          width: '56px',
+                          textAlign: 'right',
+                          color: '#7a7a99',
+                          fontSize: '11px'
+                        }}>{formatHour(hour)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Single day column - scrolls with time column */}
+                  <div style={{
+                    background: '#0e0e11',
+                    position: 'relative',
+                    borderRight: '1px solid #1e1e24'
+                  }}>
+                    {/* Hour grid lines */}
+                    {hourRange.map(hour => (
+                      <div key={hour} style={{
+                        height: '80px',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                        position: 'relative'
+                      }} />
+                    ))}
+                    
+                    {/* Business hours indicators */}
+                    {dayHours && (
+                      <>
+                        {/* Opening time line */}
+                        <div 
+                          style={{
+                            position: 'absolute',
+                            top: `calc((${dayHours.startMinutes} - ${startHour * 60}) * (80px / 60))`,
+                            left: '0',
+                            right: '0',
+                            borderTop: '2px solid #4ade80',
+                            zIndex: 15
+                          }}
+                          title={`Opens: ${Math.floor(dayHours.startMinutes / 60)}:${String(dayHours.startMinutes % 60).padStart(2, '0')}`}
+                        />
+                        {/* Closing time line */}
+                        <div 
+                          style={{
+                            position: 'absolute',
+                            top: `calc((${dayHours.endMinutes} - ${startHour * 60}) * (80px / 60))`,
+                            left: '0',
+                            right: '0',
+                            borderTop: '2px solid #f87171',
+                            zIndex: 15
+                          }}
+                          title={`Closes: ${Math.floor(dayHours.endMinutes / 60)}:${String(dayHours.endMinutes % 60).padStart(2, '0')}`}
+                        />
+                      </>
+                    )}
+                    
+                    {/* Current time line - only show if today */}
+                    {isToday && (() => {
+                      const now = new Date();
+                      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                      const windowStartMinutes = startHour * 60;
+                      const windowEndMinutes = endHour * 60;
+                      
+                      if (nowMinutes >= windowStartMinutes && nowMinutes <= windowEndMinutes) {
+                        return (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: `calc((${nowMinutes} - ${startHour * 60}) * (80px / 60))`,
+                              left: '0',
+                              right: '0',
+                              height: '3px',
+                              background: 'linear-gradient(90deg, #4e8cff 0%, #3aa7e7 100%)',
+                              borderRadius: '2px',
+                              zIndex: 25,
+                              boxShadow: '0 0 12px rgba(78, 140, 255, 0.6)',
+                              border: '1px solid rgba(78, 140, 255, 0.3)'
+                            }}
+                            title={`Current time: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                          />
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Events container */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '0',
+                      left: '0',
+                      right: '0',
+                      bottom: '0',
+                      zIndex: 10
+                    }}>
+                      {/* Events */}
+                      {processedEvents.map((event, index) => {
+                        const isBusy = busySet.has(event.calendarUrl) || (event.uid && forcedBusySet.has(event.uid));
+                        const userOverrideColor = config?.colors?.[event.calendarUrl];
+                        const baseColor = userOverrideColor || event.__baseColor || event.color || "#3aa7e7";
+                        const eventColor = isBusy ? baseColor : shadeColor(baseColor, -20);
+                        
+                        return (
+                          <div
+                            key={index}
+                            style={{
+                              position: 'absolute',
+                              top: `calc(${event.__top * 100}%)`,
+                              height: `calc(${Math.max(event.__height * 100, 8)}%)`,
+                              left: '4px',
+                              right: '4px',
+                              backgroundColor: eventColor,
+                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                              borderRadius: '5px',
+                              padding: '6px 8px',
+                              color: '#ffffff',
+                              textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              overflow: 'hidden',
+                              zIndex: 5,
+                              transition: 'all 0.15s ease'
+                            }}
+                            title={event.summary}
+                            onClick={() => setSelectedEvent(event)}
+                          >
+                            <div style={{
+                              fontWeight: '600',
+                              fontSize: '11px',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              marginBottom: '1px'
+                            }}>
+                              {event.summary}
+                            </div>
+                            <div style={{
+                              fontWeight: '500',
+                              opacity: 0.9,
+                              fontSize: '10px',
+                              letterSpacing: '-0.01em'
+                            }}>
+                              {getDateParts(event.start).hour.toString().padStart(2, '0')}:
+                              {getDateParts(event.start).minute.toString().padStart(2, '0')}
+                              {event.end && (
+                                <>
+                                  {' - '}
+                                  {getDateParts(event.end).hour.toString().padStart(2, '0')}:
+                                  {getDateParts(event.end).minute.toString().padStart(2, '0')}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
