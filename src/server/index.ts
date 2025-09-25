@@ -15,6 +15,7 @@ import { router as mergedRouter } from "./routes/merged";
 import { router as hoursRouter } from "./routes/hours";
 import { router as settingsRouter } from "./routes/settings";
 import cookieParser from "cookie-parser";
+import serverless from "serverless-http";
 
 export async function createApiApp(): Promise<Express> {
   loadEnv();
@@ -76,3 +77,5 @@ if (process.env.STANDALONE_API || process.env.NODE_ENV === 'production') {
     );
   });
 }
+
+export const hander = serverless((await createApiApp()));
