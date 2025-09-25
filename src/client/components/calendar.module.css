@@ -201,7 +201,7 @@
 	color: #f1f3f4;
 	padding: 20px 24px 0;
 }
-.dayHeaderRow { display:grid; grid-template-columns:80px repeat(7,1fr); margin-bottom:0; background:#121216; border-bottom:1px solid #1e1e24; }
+.dayHeaderRow { display:grid; grid-template-columns:var(--time-column-width) repeat(7,1fr); margin-bottom:0; background:#121216; border-bottom:1px solid #1e1e24; }
 /* REMOVED - Duplicate definition, using calendarGrid instead */
 .timeCol {
 	background: #121216;
@@ -211,8 +211,8 @@
 	padding: 0;
 	display: flex;
 	flex-direction: column;
-	width: 80px;
-	min-width: 80px;
+	width: var(--time-column-width);
+	min-width: var(--time-column-width);
 	grid-column: 1 / 2;
 	z-index: 2;
 }
@@ -248,8 +248,6 @@
 }
 .modal-content {
 	width: 100%;
-	min-width: 320px;
-	max-width: 600px;
 	margin: 0 auto;
 	padding: 0;
 	background: none;
@@ -578,7 +576,11 @@
 
 /* Responsive tweak */
 @media (max-width: 880px) {
-	.calendarGrid { grid-template-columns: 54px repeat(7, 1fr); }
+	:root { --time-column-width: 54px; } /* Update the variable for mobile */
+	.calendarGrid { grid-template-columns: var(--time-column-width) repeat(7, 1fr); }
+	.allDaySection { grid-template-columns: var(--time-column-width) repeat(7, 1fr); } /* Match main calendar grid */
+	.dayHeaderGrid { grid-template-columns: var(--time-column-width) repeat(7, 1fr); } /* Match main calendar grid */
+	.dayHeaderRow { grid-template-columns: var(--time-column-width) repeat(7, 1fr); } /* Match main calendar grid */
 	.timeHeader { font-size:10px; }
 	.dayNumber { font-size:13px; }
 	.calendarEvent { font-size:9.5px; }
@@ -866,7 +868,10 @@
 	min-height: 28px;
 	overflow: hidden;
 	min-width: 0; /* Allow flex item to shrink below content size */
+	width: 100%; /* Ensure full width */
+	max-width: 100%; /* Prevent expansion */
 	box-sizing: border-box;
+	flex: 1; /* Take equal space in grid */
 }
 
 .todayAllDay {
@@ -891,6 +896,7 @@
 	display: block; /* Change from flex to block for proper text ellipsis */
 	width: 100%;
 	max-width: 100%;
+	min-width: 0; /* No minimum width constraint */
 	box-sizing: border-box;
 	line-height: 16px; /* Proper line height for text centering */
 }

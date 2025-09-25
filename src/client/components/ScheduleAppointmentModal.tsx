@@ -9,10 +9,11 @@ interface Props {
   onClose: () => void;
   onScheduled: () => void;
   defaultDate?: string;
+  eventToGoBackTo?: () => void; // Optional callback to show back button and handle back navigation
 }
 
 
-export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onScheduled, defaultDate }) => {
+export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onScheduled, defaultDate, eventToGoBackTo }) => {
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -143,7 +144,22 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="schedule-modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflow: 'auto', minWidth: 700, maxWidth: 900, width: 'min(95vw, 900px)' }}>
-        <h2 style={{ marginBottom: 16 }}>Schedule Appointment</h2>
+        {eventToGoBackTo ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <button 
+              type="button" 
+              onClick={eventToGoBackTo} 
+              className={styles['close-btn']} 
+              style={{ fontSize: 18, background: 'none', color: '#fff', marginRight: 8 }}
+            >
+              &larr; Back
+            </button>
+            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Schedule Appointment</h2>
+            <span style={{ width: 40 }} />
+          </div>
+        ) : (
+          <h2 style={{ marginBottom: 16 }}>Schedule Appointment</h2>
+        )}
         <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
           {/* Left column: Info */}
           <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 16 }}>
