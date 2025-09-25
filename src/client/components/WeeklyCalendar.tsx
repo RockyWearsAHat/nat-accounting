@@ -267,8 +267,12 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       return false;
     }
     
-    // Show events from ANY configured calendar (not just busy ones)
-    return configuredCalendars.has(ev.calendarUrl) || (ev.uid && forcedBusy.has(ev.uid));
+    // Only show events from calendars that are marked as busy/blocking OR forced busy events
+    const calendarConfig = config.calendars.find(c => c.url === ev.calendarUrl);
+    const isCalendarBusy = calendarConfig?.busy === true;
+    const isForcedBusy = ev.uid && forcedBusy.has(ev.uid);
+    
+    return isCalendarBusy || isForcedBusy;
   });
 
   // Debug: log configuration and events

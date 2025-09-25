@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { http } from "../lib/http";
 import { CalendarEvent } from "../types/calendar";
 import styles from "./modernCalendar.module.css";
@@ -141,9 +142,41 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     }
   };
   if (!open) return null;
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="schedule-modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflow: 'auto', minWidth: 700, maxWidth: 900, width: 'min(95vw, 900px)' }}>
+  return createPortal(
+    <div 
+      className={styles['modal-overlay']} 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(18, 18, 24, 0.92)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <div 
+        className={styles['schedule-modal']} 
+        onClick={e => e.stopPropagation()} 
+        style={{ 
+          maxHeight: '90vh', 
+          overflow: 'auto', 
+          minWidth: 700, 
+          maxWidth: 900, 
+          width: 'min(95vw, 900px)',
+          background: '#18181c',
+          borderRadius: '18px',
+          padding: '32px',
+          color: '#fff',
+          position: 'relative',
+          boxShadow: '0 8px 40px 0 rgba(0,0,0,0.8), 0 1.5px 0 #23232a',
+          zIndex: 10000
+        }}
+      >
         {eventToGoBackTo ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <button 
@@ -277,6 +310,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
