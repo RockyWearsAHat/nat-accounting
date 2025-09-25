@@ -792,6 +792,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
             return eventsByDay[key] || [];
           })()}
           config={config}
+          hours={hours}
           onClose={() => {
             setSelectedDay(null);
             onConfigRefresh && onConfigRefresh();

@@ -6,6 +6,11 @@ export default function expressPlugin(entry: string): Plugin {
     name: "vite-plugin-express-bridge",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
+        // Only handle API routes, let Vite handle everything else
+        if (!req.url?.startsWith('/api/')) {
+          return next();
+        }
+
         try {
           const mod: any = await server.ssrLoadModule(entry);
           const app = mod.getApiApp
