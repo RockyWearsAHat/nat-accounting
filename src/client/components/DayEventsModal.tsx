@@ -129,7 +129,13 @@ export function DayEventsModal(props: DayEventsModalProps) {
   const relevantEvents = events.filter((ev) => {
     if (!config) return true;
     if (ev.responseStatus === 'declined' || ev.status === 'declined') return false;
-    return configuredCalendars.has(ev.calendarUrl) || (ev.uid && forcedBusySet.has(ev.uid));
+    
+    // Only show events from calendars that are marked as busy/blocking OR forced busy events
+    const calendarConfig = config.calendars.find(c => c.url === ev.calendarUrl);
+    const isCalendarBusy = calendarConfig?.busy === true;
+    const isForcedBusy = ev.uid && forcedBusySet.has(ev.uid);
+    
+    return isCalendarBusy || isForcedBusy;
   });
 
   // Separate all-day and timed events (fix: use generic filter since allDay may not exist)
@@ -223,8 +229,11 @@ export function DayEventsModal(props: DayEventsModalProps) {
   const dayTitle = `${dayName}, ${monthName} ${day}${isToday ? ' (Today)' : ''}`;
 
   return createPortal(
-    <div className={styles['modal-overlay']} onClick={onClose}>
-      <div className={styles['day-modal']} style={{ minWidth: 1200, maxWidth: 1400, width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+    <>
+      {/* Only show day modal when schedule modal is not open */}
+      {!showSchedule && (
+        <div className={styles['modal-overlay']} onClick={onClose}>
+          <div className={styles['day-modal']} style={{ minWidth: 1200, maxWidth: 1400, width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
         <div className={styles['modal-header']} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 24, padding: '0 4px' }}>
           {/* Left: Navigation and Title */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -516,36 +525,32 @@ export function DayEventsModal(props: DayEventsModalProps) {
                 display: 'flex', 
                 flexDirection: 'column',
                 borderRight: '1px solid #23232a',
-                paddingRight: '8px',
                 position: 'sticky',
                 left: 0,
                 background: '#121216',
                 zIndex: 10
               }}>
+                {/* Position time labels to align exactly with grid lines */}
                 {hourRange.map((hour, index) => (
                   <div
                     key={hour}
                     style={{
-                      height: '60px',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      justifyContent: 'flex-end',
+                      position: 'absolute',
+                      top: `${index * 60}px`, // Match the grid line position exactly
+                      right: '8px',
                       fontSize: '12px',
                       color: '#aaa',
-                      paddingRight: '4px',
-                      position: 'relative',
+                      fontWeight: '500',
+                      transform: 'translateY(-6px)', // Center the text on the line
+                      zIndex: 2
                     }}
                   >
-                    <div style={{ 
-                      position: 'absolute',
-                      top: '50%',
-                      right: '4px',
-                      transform: 'translateY(-50%)'
-                    }}>
-                      {formatHour(hour)}
-                    </div>
+                    {formatHour(hour)}
                   </div>
                 ))}
+                
+                {/* Spacer to maintain height */}
+                <div style={{ height: `${hourRange.length * 60}px` }} />
               </div>
 
               {/* Day grid with precise positioning */}
@@ -692,7 +697,7 @@ export function DayEventsModal(props: DayEventsModalProps) {
           />
         )}
 
-        {/* Scheduling Modal */}
+        {/* Scheduling Modal - when open, close this day modal temporarily */}
         {showSchedule && (
           <ScheduleAppointmentModal
             open={true}
@@ -705,8 +710,10 @@ export function DayEventsModal(props: DayEventsModalProps) {
             eventToGoBackTo={() => setShowSchedule(false)}
           />
         )}
+        </div>
       </div>
-    </div>,
+      )}
+    </>,
     document.body
   );
 }
