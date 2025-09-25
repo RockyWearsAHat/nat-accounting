@@ -5,6 +5,9 @@
 [build.environment]
   NODE_VERSION = "23.9.0"
 
+[functions]
+  directory = "dist/server/index.js"
+
 # SPA redirect for client-side routing
 [[redirects]]
   from = "/*"
