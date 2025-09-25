@@ -710,8 +710,22 @@ export function DayEventsModal(props: DayEventsModalProps) {
             eventToGoBackTo={() => setShowSchedule(false)}
           />
         )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Scheduling Modal - renders outside the day modal */}
+      {showSchedule && (
+        <ScheduleAppointmentModal
+          open={true}
+          onClose={() => setShowSchedule(false)}
+          onScheduled={() => {
+            setShowSchedule(false);
+            onConfigUpdate();
+          }}
+          defaultDate={dateStr}
+          eventToGoBackTo={() => setShowSchedule(false)}
+        />
       )}
     </>,
     document.body
