@@ -6,7 +6,7 @@
   NODE_VERSION = "23.9.0"
 
 [functions]
-  directory = "dist/server/index.js"
+  directory = "dist/server"
 
 # SPA redirect for client-side routing
 [[redirects]]
