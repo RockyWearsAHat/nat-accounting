@@ -8,15 +8,15 @@
 [functions]
   directory = "dist/server"
 
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/index/:splat"
+  status = 200
+
 # SPA redirect for client-side routing
 [[redirects]]
   from = "/*"
   to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/index/:splat"
   status = 200
 
 # Security headers for better performance and security
