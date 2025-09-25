@@ -56,4 +56,6 @@ if (process.env.STANDALONE_API) {
   });
 }
 
-export const handler = serverless(await getApiApp());
+export const handler = serverless(async () => {
+  return await getApiApp()
+});
