@@ -1,8 +1,6 @@
-import { loadEnv } from "./loadEnv";
+import "./loadEnv";
 import express, { Express } from "express";
 import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
 import { connect } from "./mongo";
 import { router as consultationRouter } from "./routes/consultations";
 import { router as availabilityRouter } from "./routes/availability";
@@ -18,7 +16,6 @@ import cookieParser from "cookie-parser";
 import serverless from "serverless-http";
 
 export async function createApiApp(): Promise<Express> {
-  loadEnv();
   await connect();
   const app = express();
   app.use(cors());
@@ -40,25 +37,6 @@ export async function createApiApp(): Promise<Express> {
   app.use("/api/hours", hoursRouter);
   app.use("/api/settings", settingsRouter);
 
-  // Serve static files when not on Netlify (local development/production)
-  if (!process.env.NETLIFY) {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const clientPath = path.join(__dirname, "../client");
-    
-    // Serve static assets
-    app.use(express.static(clientPath));
-    
-    // Handle client-side routing - serve index.html for non-API routes
-    app.get("*", (req, res) => {
-      if (!req.path.startsWith("/api")) {
-        res.sendFile(path.join(clientPath, "index.html"));
-      } else {
-        res.status(404).json({ error: "API endpoint not found" });
-      }
-    });
-  }
-
   return app;
 }
 
@@ -69,13 +47,13 @@ export function getApiApp(): Promise<Express> {
 }
 
 // Allow standalone run (still helpful for debugging separate API)
-if (process.env.STANDALONE_API || process.env.NODE_ENV === 'production') {
+if (process.env.STANDALONE_API) {
   createApiApp().then((app) => {
     const port = process.env.PORT || 4000;
     app.listen(port, () =>
-      console.log(`API server listening on :${port}`)
+      console.log(`API (standalone) listening on :${port}`)
     );
   });
 }
 
-export const hander = serverless((await createApiApp()));
+export const handler = serverless(await getApiApp());
