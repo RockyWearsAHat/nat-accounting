@@ -31,3 +31,6 @@ export function loadEnv() {
     }
   }
 }
+
+// Call loadEnv immediately when this module is imported
+loadEnv();
