@@ -36,17 +36,6 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
-# Enable gzip compression
-[[headers]]
-  for = "*.js"
-  [headers.values]
-    Content-Encoding = "gzip"
-
-[[headers]]
-  for = "*.css"
-  [headers.values]
-    Content-Encoding = "gzip"
-
 # Preload critical resources
 [[headers]]
   for = "/index.html"
