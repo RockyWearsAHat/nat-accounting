@@ -220,54 +220,141 @@ Fetch, parse, and serve iCloud calendar events (with RRULE expansion) for admin 
 
 ---
 
-### WeeklyCalendar Component (`src/client/components/WeeklyCalendar.tsx`)
+### DayEventsModal Component (`src/client/components/DayEventsModal.tsx`)
 
 **Purpose:**
-React component that displays a weekly calendar view with events from both iCloud and Google calendars. Handles event filtering, timezone conversion, and visual styling.
+Modal overlay component that displays detailed day view with events from both iCloud and Google calendars. Uses React Portal for proper modal rendering and matches WeeklyCalendar structure with professional styling.
 
 **Key Features:**
-- Fetches events from `/api/merged/week` endpoint (combines iCloud + Google)
-- Displays events in Mountain Time (configurable via timezone prop)
-- Shows ALL configured calendars, with visual distinction between busy/non-busy
-- Supports event overlap visualization with striped patterns
-- Handles event color inheritance from parent calendars
+- **React Portal Implementation**: Renders as true modal overlay at document.body level using `createPortal`
+- **Event Controls Panel**: Left sidebar (400px) with event list, business hours info, and quick actions
+- **Mini Calendar View**: Right panel with scrollable 7am-9pm time grid showing precise event positioning
+- **Navigation**: Previous/Next day buttons with optional `onNavigateDay` callback prop
+- **Professional Styling**: Matches WeeklyCalendar design with proper modal overlay, backdrop blur, and consistent colors
+- **Business Hours Integration**: Green/red horizontal lines for opening/closing times
+- **Event Management**: Quick actions for marking busy/non-busy and deleting events
 
-**Recent Fixes (Dec 2024):**
-- **Fixed disappearing events issue** - Changed filtering logic from `busySet.has(ev.calendarUrl)` to `configuredCalendars.has(ev.calendarUrl)` to show ALL configured calendars, not just busy ones
-- **Fixed color consistency** - Events now properly inherit calendar colors via priority: user override > event color > default
-- **Fixed business hours filtering** - Removed filtering that excluded events outside business hours (8AM-6PM). Now ALL events display regardless of time
-- **Fixed timezone conversion issues** - Improved handling of different datetime formats (UTC vs local time)
-- **Performance optimization** - Added server-side filtering capability with calendarUrls parameter (can be enabled/disabled)
-- Visual distinction maintained: busy calendar events use full color, non-busy use shaded color (`shadeColor(baseColor, -30)`)
-
-**Current Issues (Sept 2025):**
-- Google events missing when server-side filtering enabled
-- Timezone conversion causing 6-hour shift (3:30 PM → 9:30 AM) suggesting UTC vs local time confusion
-- Server-side filtering temporarily disabled for debugging
-
-**Event Filtering Logic:**
+**Props Interface:**
 ```typescript
-const relevantEvents = events.filter((ev) => {
-  if (!config) return true; // show until config loaded
-  
-  // Filter out declined events
-  if (ev.responseStatus === 'declined' || ev.status === 'declined') {
-    return false;
-  }
-  
-  // Show events from ANY configured calendar (not just busy ones)
-  return configuredCalendars.has(ev.calendarUrl) || (ev.uid && forcedBusy.has(ev.uid));
-});
+interface DayEventsModalProps {
+  day: number;
+  month: number;
+  year: number;
+  events: CalendarEvent[];
+  config: CalendarConfig | null;
+  hours?: { [day: string]: { raw: string; startMinutes: number; endMinutes: number }; } | null;
+  onClose: () => void;
+  onConfigUpdate: () => void;
+  onNavigateDay?: (direction: 'prev' | 'next') => void;
+  footer?: React.ReactNode;
+}
 ```
 
-**Timezone Handling:**
-- Uses `date-fns-tz` for timezone conversion to Mountain Time
-- Handles both UTC and local time input formats
-- Business hours no longer filter out events, only affect grid display
+**Recent Fixes (Dec 2024):**
+- **Fixed modal overlay rendering** - Now uses `createPortal(jsx, document.body)` to render at document root instead of inline
+- **Fixed TypeScript interface** - Added optional `onNavigateDay` prop to match WeeklyCalendar usage
+- **Fixed navigation functionality** - Proper callback handling for day navigation when parent provides handler
+- **Maintained existing design** - Two-panel layout with event controls and mini calendar preserved
+- **Fixed build optimization** - No longer generates scattered build artifacts in src folder
+
+**Current Status:**
+- ✅ Modal displays as proper overlay using React Portal
+- ✅ TypeScript compilation working without errors
+- ✅ Professional styling matching WeeklyCalendar design
+- ✅ Business hours lines working (green opening, red closing)
+- ✅ Scrollable 7am-9pm time grid
+- ✅ Event controls panel with quick actions
+- ✅ Navigation buttons with callback support
 
 **Dependencies:**
-- `/api/merged/week` endpoint for unified event data
-- CalendarConfig for calendar settings and colors
-- date-fns-tz for timezone handling
+- `react` with `createPortal` from "react-dom"
+- `calendar.module.css` for modal styling classes
+- Parent component must provide event data and config
+- Optional navigation callback for day switching
+
+**Usage Example:**
+```tsx
+{selectedDay !== null && createPortal(
+  <DayEventsModal
+    day={selectedDay}
+    month={currentMonth}
+    year={currentYear}
+    events={dayEvents}
+    config={calendarConfig}
+    hours={businessHours}
+    onClose={() => setSelectedDay(null)}
+    onConfigUpdate={handleConfigUpdate}
+    onNavigateDay={(direction) => navigateToDay(direction)}
+  />,
+  document.body
+)}
+```
+
+**See also:**
+- WeeklyCalendar component (parent integration)
+- EventModal and ScheduleAppointmentModal (child modals)
+
+---
+
+### Build System Optimizations (Dec 2024)
+
+**Root TypeScript Configuration (`tsconfig.json`):**
+- **Modern ESM setup**: ES2022 target with bundler module resolution
+- **Type checking only**: `noEmit: true` - compilation handled by build tools
+- **Universal coverage**: Includes all TypeScript files in project
+- **Clean excludes**: Excludes dist, node_modules, and backup files
+
+**Vite Configuration (`vite.config.ts`):**
+- **Clean builds**: `emptyOutDir: true` ensures dist folder is cleaned before each build
+- **Code splitting**: Separate chunks for React vendor libs and date utilities
+- **Performance optimizations**: ESNext target, esbuild minification, sourcemaps disabled for production
+- **Asset optimization**: 4KB inline limit, CSS code splitting enabled
+- **Dependency pre-bundling**: React, React-DOM, date-fns optimized for faster dev server startup
+
+**Rollup Configuration (`rollup.config.mjs`):**
+- **ESM compilation**: Compiles TypeScript server files to proper ESM with `.js` extensions
+- **Module preservation**: Uses `preserveModules: true` to maintain file structure
+- **External dependencies**: Marks all node_modules and built-ins as external
+- **Glob pattern inputs**: Uses `globSync("src/server/**/*.ts")` for automatic file discovery, eliminating manual maintenance
+- **Smart filtering**: Excludes `.d.ts` and `.test.ts` files automatically
+
+**Package Scripts:**
+- `build`: Full build using `tsc` (type checking) + `vite build` (client) + `rollup` (server)
+- `start`: Production server with `NODE_ENV=production node dist/server/index.js`
+- `start:dev`: Development server using `tsx` for direct TypeScript execution
+- `build:netlify`: Full production build with compression
+- `compress`: Creates gzipped versions of JS and CSS files
+- `analyze`: Bundle size analysis for optimization
+
+**Netlify Deployment (`netlify.toml`):**
+- **SPA routing**: Wildcard redirect to index.html for client-side routing
+- **Aggressive caching**: 1-year cache for assets, revalidation for HTML
+- **Security headers**: XSS protection, content-type enforcement, referrer policy
+- **Compression**: Pre-gzip assets for optimal transfer speeds
+- **Resource preloading**: Critical CSS and JS files preloaded in HTML headers
+
+**Recent Fixes:**
+- ✅ All build artifacts now go to `dist/` folder only
+- ✅ No scattered `.js`, `.d.ts`, `.map` files in `src/` folders
+- ✅ TypeScript configuration prevents source pollution with `noEmit: true`
+- ✅ Rollup properly compiles server TypeScript to ESM with correct `.js` extensions
+- ✅ Server runs successfully in production with proper ESM module resolution
+- ✅ Optimized chunk splitting reduces bundle sizes
+- ✅ Netlify configuration enables maximum performance
+- ✅ Glob wildcard patterns eliminate manual file listing maintenance
+
+**Build Performance:**
+- Client build: ~535ms with optimized dependencies
+- Server build: ~5.6s with Rollup ESM compilation
+- Asset sizes: 147KB main bundle, 142KB React vendor (gzipped ~46KB each)
+- Clean separation: Client assets in `dist/client/`, server in `dist/server/`
+
+**Key Technical Solutions:**
+- **ESM Import Resolution**: Rollup automatically adds `.js` extensions to compiled imports
+- **Module Resolution**: Uses `bundler` mode for TypeScript with proper external handling
+- **Production Server**: Automatically starts when `NODE_ENV=production` is set
+- **Development Workflow**: Uses `tsx` for direct TypeScript execution in development
+
+---
 
 ---
