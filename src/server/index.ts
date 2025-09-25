@@ -2,16 +2,6 @@ import "./loadEnv";
 import express from "express";
 import cors from "cors";
 import { connect } from "./mongo";
-import { router as consultationRouter } from "./routes/consultations";
-import { router as availabilityRouter } from "./routes/availability";
-import { router as scheduleRouter } from "./routes/schedule";
-import { router as authRouter } from "./routes/auth";
-import { router as calendarRouter } from "./routes/calendar";
-import { router as icloudRouter } from "./routes/icloud";
-import { router as googleRouter } from "./routes/google";
-import { router as mergedRouter } from "./routes/merged";
-import { router as hoursRouter } from "./routes/hours";
-import { router as settingsRouter } from "./routes/settings";
 import cookieParser from "cookie-parser";
 import serverless from "serverless-http";
 
@@ -62,26 +52,38 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
 });
 
-// Mount all API routes
-app.use("/api/auth", authRouter);
-app.use("/api/consultations", consultationRouter);
-app.use("/api/availability", availabilityRouter);
-app.use("/api/schedule", scheduleRouter);
-app.use("/api/calendar", calendarRouter);
-app.use("/api/icloud", icloudRouter);
-app.use("/api/google", googleRouter);
-app.use("/api/merged", mergedRouter);
-app.use("/api/hours", hoursRouter);
-app.use("/api/settings", settingsRouter);
-
 const startServer = async () => {
-  // Set up database connection
+  // Set up database connection FIRST
   try {
     await connect();
     console.log("✅ Database connected for main application");
   } catch (error) {
     console.error("Failed to set up database connection:", error);
   }
+
+  // Import and mount routes AFTER database is connected
+  const { router: consultationRouter } = await import("./routes/consultations");
+  const { router: availabilityRouter } = await import("./routes/availability");
+  const { router: scheduleRouter } = await import("./routes/schedule");
+  const { router: authRouter } = await import("./routes/auth");
+  const { router: calendarRouter } = await import("./routes/calendar");
+  const { router: icloudRouter } = await import("./routes/icloud");
+  const { router: googleRouter } = await import("./routes/google");
+  const { router: mergedRouter } = await import("./routes/merged");
+  const { router: hoursRouter } = await import("./routes/hours");
+  const { router: settingsRouter } = await import("./routes/settings");
+
+  // Mount all API routes AFTER database connection
+  app.use("/api/auth", authRouter);
+  app.use("/api/consultations", consultationRouter);
+  app.use("/api/availability", availabilityRouter);
+  app.use("/api/schedule", scheduleRouter);
+  app.use("/api/calendar", calendarRouter);
+  app.use("/api/icloud", icloudRouter);
+  app.use("/api/google", googleRouter);
+  app.use("/api/merged", mergedRouter);
+  app.use("/api/hours", hoursRouter);
+  app.use("/api/settings", settingsRouter);
 
   if (process.env && process.env["VITE"]) {
     // If running in dev, just run the server from vite, vite plugin to run express is used (SEE vite.config.ts)
