@@ -3,7 +3,7 @@
   command = "npm run build"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "23.9.0"
 
 # SPA redirect for client-side routing
 [[redirects]]
@@ -52,6 +52,3 @@
   for = "/index.html"
   [headers.values]
     Link = "</assets/react-vendor-D3F3s8fL.js>; rel=preload; as=script, </assets/index-BO_Ljbhw.css>; rel=preload; as=style"
-
-[build.environment]
-  NODE_VERSION = "23"
