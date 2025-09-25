@@ -612,6 +612,37 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   </>
                 )}
                 
+                {/* Current time line - only show on today's column */}
+                {isToday && (() => {
+                  const now = new Date();
+                  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                  const windowStartMinutes = startHour * 60;
+                  const windowEndMinutes = endHour * 60;
+                  
+                  // Only show if current time is within the visible window
+                  if (nowMinutes >= windowStartMinutes && nowMinutes <= windowEndMinutes) {
+                    return (
+                      <div
+                        className={styles.currentTimeLine}
+                        style={{
+                          top: `calc((${nowMinutes} - ${startHour * 60}) * (var(--hour-height) / 60))`,
+                          position: 'absolute',
+                          left: '0',
+                          right: '0',
+                          height: '3px',
+                          background: 'linear-gradient(90deg, #4e8cff 0%, #3aa7e7 100%)',
+                          borderRadius: '2px',
+                          zIndex: 25,
+                          boxShadow: '0 0 12px rgba(78, 140, 255, 0.6)',
+                          border: '1px solid rgba(78, 140, 255, 0.3)'
+                        }}
+                        title={`Current time: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
+                
                 {/* Events layer */}
                 <div className={styles.eventsContainer}>
                   {/* Overlap stripes */}
