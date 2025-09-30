@@ -74,6 +74,7 @@ const startServer = async () => {
   const { router: hoursRouter } = await import("./routes/hours");
   const { router: settingsRouter } = await import("./routes/settings");
   const { router: debugRouter } = await import("./routes/debug");
+  const { default: zoomRouter } = await import("./routes/zoom");
 
   // Mount all API routes AFTER database connection
   app.use("/api/auth", authRouter);
@@ -88,6 +89,7 @@ const startServer = async () => {
   app.use("/api/hours", hoursRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/debug", debugRouter);
+  app.use("/api/zoom", zoomRouter);
 
   // Initialize calendar cache immediately on startup
   console.log("🚀 Starting calendar cache initialization...");

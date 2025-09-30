@@ -37,6 +37,8 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [overlapWarning, setOverlapWarning] = useState<string | null>(null);
+  const [creatingZoomMeeting, setCreatingZoomMeeting] = useState(false);
+  const [zoomMeetingId, setZoomMeetingId] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -130,6 +132,74 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
       setOverlapWarning(null);
     }
   }, [form.date, form.time, form.length, events, selectedSlot]);
+
+  // Cleanup Zoom meeting if modal is closed without scheduling
+  const cleanupZoomMeeting = async () => {
+    if (zoomMeetingId) {
+      try {
+        await http.del(`/api/zoom/meeting/${zoomMeetingId}`);
+        console.log('[Zoom] Cleaned up unused meeting:', zoomMeetingId);
+      } catch (error) {
+        console.warn('[Zoom] Failed to cleanup meeting:', error);
+      }
+    }
+  };
+
+  // Handle modal close with cleanup
+  const handleClose = () => {
+    if (zoomMeetingId) {
+      cleanupZoomMeeting();
+    }
+    // Reset all state
+    setForm({
+      name: "",
+      description: "",
+      location: "",
+      videoUrl: "",
+      date: defaultDate || "",
+      time: "",
+      length: 30,
+    });
+    setZoomMeetingId(null);
+    setError(null);
+    setOverlapWarning(null);
+    setSelectedSlot(null);
+    onClose();
+  };
+
+  // Create Zoom meeting immediately (before scheduling)
+  const createZoomMeeting = async () => {
+    setCreatingZoomMeeting(true);
+    setError(null);
+
+    try {
+      // Create a meeting for "now + 1 hour" as placeholder - will be updated when appointment is scheduled
+      const defaultStart = DateTime.now().setZone(TIMEZONE).plus({ hours: 1 });
+      const clientName = form.name || "Client";
+      
+      const response = await http.post("/api/zoom/create-meeting", {
+        topic: `Consultation with ${clientName}`,
+        startTime: defaultStart.toISO(),
+        duration: parseInt(form.length.toString(), 10) || 30,
+        agenda: `Consultation meeting with ${clientName}`,
+        timezone: TIMEZONE
+      }) as any;
+
+      if (response.success && response.meeting) {
+        setForm(f => ({ ...f, videoUrl: response.meeting.join_url }));
+        setZoomMeetingId(response.meeting.id.toString());
+        console.log('[Zoom] Meeting created with placeholder time:', response.meeting);
+      } else {
+        throw new Error(response.error || "Failed to create Zoom meeting");
+      }
+    } catch (error: any) {
+      console.error('[Zoom] Failed to create meeting:', error);
+      setError(`Failed to create Zoom meeting: ${error.message || error}`);
+    } finally {
+      setCreatingZoomMeeting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -181,6 +251,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
           description: form.description,
           location: form.location,
           videoUrl: form.videoUrl,
+          zoomMeetingId: zoomMeetingId,
           start: start.toISO(),
           end: end.toISO(),
           calendarId: "Business",
@@ -229,7 +300,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
   return createPortal(
     <div 
       className={styles['modal-overlay']} 
-      onClick={onClose}
+      onClick={handleClose}
       style={{
         position: 'fixed',
         top: 0,
@@ -306,12 +377,38 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
               />
             </label>
             <label style={{ fontWeight: 500 }}>Video Call Link
-              <input
-                name="videoUrl"
-                value={form.videoUrl}
-                onChange={handleChange}
-                style={{ width: '100%', marginTop: 4, padding: '0.5rem 0.7rem', borderRadius: 8, border: '1px solid #e5e5e5' }}
-              />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <input
+                  name="videoUrl"
+                  value={form.videoUrl}
+                  onChange={handleChange}
+                  style={{ flex: 1, marginTop: 4, padding: '0.5rem 0.7rem', borderRadius: 8, border: '1px solid #e5e5e5' }}
+                  placeholder="https://zoom.us/j/... or enter manually"
+                />
+                <button
+                  type="button"
+                  onClick={createZoomMeeting}
+                  disabled={creatingZoomMeeting || !!zoomMeetingId}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: creatingZoomMeeting ? '#ccc' : zoomMeetingId ? '#28a745' : '#007AFF',
+                    color: 'white',
+                    fontWeight: 500,
+                    cursor: (creatingZoomMeeting || zoomMeetingId) ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {creatingZoomMeeting ? 'Creating...' : zoomMeetingId ? '✓ Created' : 'Create Zoom'}
+                </button>
+              </div>
+              {zoomMeetingId && (
+                <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#666' }}>
+                  ✓ Zoom meeting created (ID: {zoomMeetingId})
+                </div>
+              )}
             </label>
           </div>
           {/* Right column: Date/Time/Slots */}
@@ -400,7 +497,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
             )}
             {error && <div className={styles.errorMsg}>{error}</div>}
             <div className={styles.modalActions}>
-              <button type="button" onClick={onClose} className={styles.btnSecondary}>Cancel</button>
+              <button type="button" onClick={handleClose} className={styles.btnSecondary}>Cancel</button>
               <button type="submit" className={styles.btnPrimary} disabled={loading}>{loading ? "Scheduling..." : "Schedule"}</button>
             </div>
           </div>

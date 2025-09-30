@@ -149,6 +149,61 @@ When testing authenticated endpoints, you can use the `curl` command with the `-
 ### Guidelines
 Just know that the database is in UTC time, and the everything in the frontend should run on mountain time (the local timezone for this computer). Quick load times, good UX and UI, and snappy interactable helpful components are the name of the game. Ensure everything is linked together and works as one. Unified color scheme, consistent styling rules, across the entire site ensure great quality and high standards.
 
+### Zoom Meeting Integration (Dec 2024)
+
+**Purpose:**
+Automatically create Zoom meetings when scheduling appointments, with proper cleanup to prevent orphaned meetings.
+
+**Key Components:**
+
+**1. ZoomService (`src/server/services/ZoomService.ts`)**
+- Server-to-Server OAuth authentication using Account ID, Client ID, and Client Secret
+- Creates meetings via Zoom REST API with automatic password generation
+- Supports meeting deletion for cleanup
+- Automatic token refresh with caching (60s buffer)
+- Requires environment variables: `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`
+
+**2. Zoom API Routes (`src/server/routes/zoom.ts`)**
+- `POST /api/zoom/create-meeting` - Create meeting (requires auth)
+- `DELETE /api/zoom/meeting/:meetingId` - Delete meeting (requires auth)  
+- `GET /api/zoom/status` - Check API configuration
+
+**3. ScheduleAppointmentModal Integration**
+- "Create Zoom" button generates meeting immediately (not on schedule)
+- Meeting link auto-populates in Video Call Link field
+- Modal cancellation automatically deletes unused Zoom meetings
+- Meeting ID stored with appointment for future management
+
+**4. Backend Storage**
+- Zoom meeting ID stored as `X-ZOOM-MEETING-ID` custom property in iCal events
+- Enables future meeting management and cleanup
+
+**Setup Requirements:**
+1. Create Zoom App at https://marketplace.zoom.us/develop/create
+2. Choose "Server-to-Server OAuth" app type
+3. Set scopes: `meeting:write`, `meeting:read`, `meeting:delete`
+4. Get credentials from app and set environment variables:
+   ```
+   ZOOM_ACCOUNT_ID=your_account_id_here
+   ZOOM_CLIENT_ID=your_client_id_here
+   ZOOM_CLIENT_SECRET=your_client_secret_here
+   ```
+
+**Current Status:**
+- ✅ Backend API implemented and tested
+- ✅ Frontend UI integrated with auto-cleanup
+- ✅ Meeting data stored with appointments
+- ✅ Server-to-Server OAuth authentication working
+- ✅ Production ready with configured credentials
+
+**Usage Flow:**
+1. User opens Schedule Appointment Modal
+2. User clicks "Create Zoom" button
+3. Zoom meeting created immediately with placeholder time
+4. Video URL field populated with join link
+5. User schedules appointment → meeting time updated
+6. If user cancels modal → meeting automatically deleted
+
 ### Memory Bank
 FEEL FREE TO WRITE TO THIS FILE, I ACTUALLY WOULD PREFER YOU TO KEEP THIS FILE UPDATED WITH NEW HELPFUL INFORMATION, BASICALLY AS A REFERENCE. YOU DON'T NEED TO WRITE FIXES/BUG REPORTS OR ANYTHING, BUT WRITE A SUMMARY OF WHAT THE FUNCTION IS, THE ENDPOINT IT CAN BE CALLED AT (IF APPLICABLE) & POSSIBLY FILE LOCATION FOR SIMPLER IMPORTS WHEN REFERENCING, THE PARAMETERS IT TAKES, AND HOW IT ACTUALLY WORKS INTERNALLY, WHAT DOES IT CALL, WHAT FUNCTIONS DOES IT RELY ON. THIS WILL BE HELPFUL TO MAINTAIN DRY CODE AND DEBUG ISSUES E.G. MULTIPLE FUNCTIONS ARE FAILING, THEY MIGHT SHARE A CALL TO ANOTHER FUNCTION THAT IS SILENTLY FAILING, ETC. ALL OF THIS DOCUMENTATION INFORMATION THAT YOU SHOULD REMEMBER CAN BE WRITTEN BELOW IN THE
 
