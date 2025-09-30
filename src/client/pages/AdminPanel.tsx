@@ -3,27 +3,12 @@ import { http } from '../lib/http';
 import { WeeklyCalendar } from '../components/WeeklyCalendar';
 import styles from '../components/calendar.module.css';
 import { ScheduleAppointmentModal } from '../components/ScheduleAppointmentModal';
+import { MeetingsSection } from '../components/MeetingsSection';
 
 interface User { email:string; role:string; }
 interface CalendarConfig { calendars:any[]; whitelist:string[]; busyEvents?:string[]; colors?:Record<string,string>; }
 
 // Subcomponents --------------------------------------------------
-const ConsultationsList: React.FC<{ data:any[]|null }> = ({ data }) => {
-  if (!data) return <p>Loading consultations…</p>;
-  return (
-    <details open className={styles.sectionCard}>
-      <summary>Consultations ({data.length})</summary>
-      <ul className={styles.consultationsList}>
-        {data.map(c => (
-          <li key={c.id}>
-            <strong>{c.name}</strong> – {c.company} – {new Date(c.createdAt).toLocaleString()}<br/>
-            <span className={styles.muted}>{c.email}</span>
-          </li>
-        ))}
-      </ul>
-    </details>
-  );
-};
 
 const CalendarSettings: React.FC<{ config:CalendarConfig|null; onBusyToggle:(url:string)=>void; onColor:(u:string,c:string)=>void; }> = ({ config, onBusyToggle, onColor }) => {
   if (!config) return <p className={styles.smallMuted}>Loading config…</p>;
@@ -61,7 +46,6 @@ const CalendarSettings: React.FC<{ config:CalendarConfig|null; onBusyToggle:(url
 
 // Main Admin Panel ------------------------------------------------
 export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, onLogout }) => {
-  const [consultations,setConsultations] = useState<any[]|null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [config,setConfig] = useState<CalendarConfig|null>(null);
   const [settings,setSettings] = useState<{ timezone:string; businessName:string; businessHours:any }|null>(null);
@@ -72,7 +56,7 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
   const [connectingGoogle,setConnectingGoogle] = useState(false);
 
 
-  const loadConsultations = async()=>{ try { const data = await http.get<any>('/api/consultations/admin'); setConsultations(data.consultations||[]);} catch { setConsultations([]);} };
+
   const loadConfig = async()=>{ 
     try { 
       const data = await http.get<any>('/api/icloud/config');
@@ -85,7 +69,7 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
   const loadTimezones = async()=>{ try { const data = await http.get<any>('/api/settings/timezones'); setAvailableTimezones(data.timezones);} catch(e){ console.error(e);} };
   const loadHours = async()=>{ try { const data = await http.get<any>('/api/hours'); if(data.ok) setHours(data.hours);} catch(e){ console.error(e);} };
 
-  useEffect(()=>{ (async()=>{ await loadConsultations(); await loadConfig(); await loadSettings(); await loadTimezones(); await loadHours(); })(); },[]);
+  useEffect(()=>{ (async()=>{ await loadConfig(); await loadSettings(); await loadTimezones(); await loadHours(); })(); },[]);
   useEffect(()=>{ (async()=>{ try { const data = await http.get<any>('/api/google/status'); setGoogleStatus(data);} catch{} })(); },[]);
 
   const startGoogleAuth = async()=> {
@@ -158,7 +142,13 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
           }
         }}
       />
-      <ConsultationsList data={consultations} />
+      <MeetingsSection onMeetingUpdate={() => {
+        loadConfig();
+        // Refresh calendar if possible
+        if (window.dispatchEvent) {
+          window.dispatchEvent(new CustomEvent('calendar-refresh'));
+        }
+      }} />
       
       <div className={styles.sectionCard}>
         <h4>Calendar Display</h4>
