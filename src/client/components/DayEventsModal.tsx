@@ -241,13 +241,29 @@ export function DayEventsModal(props: DayEventsModalProps) {
 
   const handleDelete = async (uid: string) => {
     if (!window.confirm('Delete this event? This cannot be undone.')) return;
+    
     setDeletingUid(uid);
+    console.log(`[DELETE] Optimistic delete for ${uid}`);
+    
     try {
+      // Delete from server silently
       await http.post('/api/icloud/delete-event', { uid });
-      onConfigUpdate();
-      setDeletingUid(null);
+      console.log(`[DELETE] Server deletion completed for ${uid}`);
+      
+      // Optimistic update - remove from local state immediately
+      window.dispatchEvent(new CustomEvent('calendar-update', { 
+        detail: { 
+          type: 'delete', 
+          uid,
+          silent: true 
+        } 
+      }));
+      
     } catch (e) {
-      alert('Failed to delete event.');
+      console.error(`[DELETE] Failed to delete event ${uid}:`, e);
+      alert('Failed to delete event. Please try again.');
+    } finally {
+      // Always clear the deleting state
       setDeletingUid(null);
     }
   };
@@ -743,6 +759,11 @@ export function DayEventsModal(props: DayEventsModalProps) {
                     }}>
                       {/* Events */}
                       {processedEvents.map((event, index) => {
+                        // Hide events that are being deleted for instant visual feedback
+                        if (deletingUid && event.uid === deletingUid) {
+                          return null;
+                        }
+                        
                         const isBusy = busySet.has(event.calendarUrl) || (event.uid && forcedBusySet.has(event.uid));
                         const userOverrideColor = config?.colors?.[event.calendarUrl];
                         const baseColor = userOverrideColor || event.__baseColor || event.color || "#3aa7e7";
@@ -754,7 +775,7 @@ export function DayEventsModal(props: DayEventsModalProps) {
                             style={{
                               position: 'absolute',
                               top: `calc(${event.__top * 100}%)`,
-                              height: `calc(${Math.max(event.__height * 100, 8)}%)`,
+                              height: `calc(${event.__durationMinutes} * (80px / 60))`,
                               left: '4px',
                               right: '4px',
                               backgroundColor: eventColor,

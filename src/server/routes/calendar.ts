@@ -159,20 +159,9 @@ router.post("/schedule", requireAuth, requireAdmin, async (req, res) => {
           return res.status(500).json({ error: 'Failed to upload event to iCloud', details: `${result.status} ${result.statusText}` });
         }
 
-        // Invalidate day and week cache for this date
-        const { invalidateCache, createCacheKey } = await import("../cache");
-        const eventDate = mountainStart.toISODate();
-        if (eventDate) {
-          // Invalidate day cache
-          await invalidateCache(createCacheKey("icloud", "day", eventDate));
-        }
-        // Invalidate week cache (for any week containing this date)
-        // Find week start/end (Sunday-Saturday)
-        const weekStart = mountainStart.startOf('week').toISODate();
-        const weekEnd = mountainStart.endOf('week').toISODate();
-        if (weekStart && weekEnd) {
-          await invalidateCache(createCacheKey("icloud", "week", weekStart, weekEnd));
-        }
+        // Comprehensive cache invalidation for immediate UI updates
+        const { clearAllCalendarCaches } = await import("../cache");
+        await clearAllCalendarCaches("schedule");
         
         return res.json({ success: true, uid, calendar: targetCalendar.displayName });
       } catch (err) {

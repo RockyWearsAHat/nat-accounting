@@ -108,7 +108,10 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       try {
         setLoading(true);
         console.log(`[WeeklyCalendar] Fetching all events from merged endpoint...`);
-        const data = await http.get<any>("/api/merged/all");
+        
+        // Add cache busting when forcing refresh
+        const cacheParam = now - lastFetch < 1000 ? { _t: now } : {};
+        const data = await http.get<any>("/api/merged/all", cacheParam);
         console.log(`[WeeklyCalendar] Received ${data.events?.length || 0} total events`);
         if (data.metadata?.sourceCounts) {
           console.log(`[WeeklyCalendar] Sources:`, data.metadata.sourceCounts);
@@ -129,21 +132,91 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     };
 
     fetchAllEvents();
-    const handler = () => {
-      setLastFetch(0); // Force refresh
+    
+    // Handle calendar updates (optimistic updates and background sync)
+    const updateHandler = (event: any) => {
+      const { type, uid } = event.detail || {};
+      
+      // Only handle delete events now - scheduling is handled by direct callback
+      if (type === 'delete' && uid) {
+        console.log(`[WeeklyCalendar] Optimistic delete: ${uid}`);
+        setAllEvents(prev => prev.filter(e => e.uid !== uid));
+      }
+    };
+    
+    // Legacy refresh handler (deprecated, but keeping for compatibility)
+    const refreshHandler = () => {
+      console.log('[WeeklyCalendar] Legacy refresh - forcing reload');
+      setLastFetch(0);
       fetchAllEvents();
     };
-    window.addEventListener('calendar-refresh', handler);
     
+    window.addEventListener('calendar-update', updateHandler);
+    window.addEventListener('calendar-refresh', refreshHandler);
+    
+    // Set up a subtle background sync to catch any missed updates
+    // This runs every 30 seconds but only updates if there are actual differences
+    const backgroundSync = setInterval(async () => {
+      try {
+        // Only sync if we have events and it's been a while since last fetch
+        if (allEvents.length > 0 && Date.now() - lastFetch > 30000) {
+          const data = await http.get<any>("/api/merged/all", { _bg: Date.now() });
+          const serverEvents = data.events || [];
+          
+          // Preserve optimistic events (temporary UIDs starting with "temp-")
+          const optimisticEvents = allEvents.filter(e => e.uid?.startsWith('temp-') || false);
+          const nonOptimisticEvents = allEvents.filter(e => e.uid && !e.uid.startsWith('temp-'));
+          
+          // Only sync if server has more events, or if we have no optimistic events and server differs
+          const shouldSync = optimisticEvents.length === 0 
+            ? (serverEvents.length !== allEvents.length || 
+               (serverEvents.length > 0 && allEvents.length > 0 && 
+                serverEvents[0]?.uid !== allEvents[0]?.uid))
+            : serverEvents.length > nonOptimisticEvents.length;
+          
+          if (shouldSync) {
+            console.log('[WeeklyCalendar] Background sync detected changes - updating silently');
+            
+            // Smart merge: Replace optimistic events if real versions exist
+            const mergedEvents = [...serverEvents];
+            
+            // Only keep optimistic events that don't have a corresponding real event
+            optimisticEvents.forEach(optimisticEvent => {
+              const hasRealVersion = serverEvents.some((serverEvent: any) => 
+                serverEvent.summary === optimisticEvent.summary &&
+                Math.abs(new Date(serverEvent.start).getTime() - new Date(optimisticEvent.start).getTime()) < 60000 // Within 1 minute
+              );
+              
+              if (!hasRealVersion) {
+                mergedEvents.push(optimisticEvent);
+              } else {
+                console.log('[WeeklyCalendar] Replacing optimistic event with real version:', optimisticEvent.summary);
+              }
+            });
+            
+            setAllEvents(mergedEvents);
+            setLastFetch(Date.now());
+          }
+        }
+      } catch (error) {
+        // Silently ignore background sync errors
+      }
+    }, 30000);
+
     return () => {
       isCurrent = false;
-      window.removeEventListener('calendar-refresh', handler);
+      clearInterval(backgroundSync);
+      window.removeEventListener('calendar-update', updateHandler);
+      window.removeEventListener('calendar-refresh', refreshHandler);
     };
   }, [config]);
 
   // Expand cached events for current week with RRULE processing
   useEffect(() => {
+    console.log(`[WeeklyCalendar] useEffect triggered - allEvents.length: ${allEvents.length}, weekStart: ${weekStart.toISOString().split("T")[0]}`);
+    
     if (allEvents.length === 0) {
+      console.log(`[WeeklyCalendar] No events to expand, setting empty array`);
       setEvents([]);
       return;
     }
@@ -154,6 +227,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     const expandedEvents = expandEventsForWeek(allEvents, weekStart, config);
     
     console.log(`[WeeklyCalendar] Showing ${expandedEvents.length} expanded events for current week`);
+    console.log(`[WeeklyCalendar] Expanded events:`, expandedEvents.map(e => `${e.summary} at ${e.start}`));
     setEvents(expandedEvents);
   }, [allEvents, weekStart, config]);
 
@@ -1140,10 +1214,11 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         <ScheduleAppointmentModal
           open={showQuickSchedule}
           onClose={() => setShowQuickSchedule(false)}
-          onScheduled={() => {
+          onScheduled={(newEvent) => {
+            // Add the new event directly to state for instant feedback
+            setAllEvents(prev => [...prev, newEvent]);
             setShowQuickSchedule(false);
             onConfigRefresh && onConfigRefresh();
-            window.dispatchEvent(new CustomEvent('calendar-refresh'));
           }}
           defaultDate={quickScheduleDate.toISOString().split('T')[0]}
         />

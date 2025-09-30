@@ -6,10 +6,13 @@ import { CalendarConfigModel } from "../models/CalendarConfig";
 import { getAuthorizedClient } from "./google";
 import { google } from "googleapis";
 import { connect as connectMongo } from "../mongo";
-import { getCache } from "../cache";
+import { getCache, setIcloudEventCache } from "../cache";
 
 const { rrulestr } = rrulePkg;
 const eventCache: Record<string, any[]> = {};
+
+// Register the eventCache with the shared cache system
+setIcloudEventCache(eventCache);
 
 function createCacheKey(...args: string[]): string {
   return args.join(":");
@@ -137,7 +140,7 @@ function parseICalDate(val: string): Date {
   return result;
 }
 
-function parseICalEvents(objects: any[], from: Date, to: Date) {
+export function parseICalEvents(objects: any[], from: Date, to: Date) {
   const events = [];
   
   for (const obj of objects) {
@@ -395,7 +398,7 @@ async function fetchCalendarDisplayNames(calendarUrls: string[], credentials: { 
 }
 
 // Function to fetch and cache iCloud events with direct HTTP requests
-async function fetchAndCacheEvents(from: Date, to: Date, cacheKey: string): Promise<any[]> {
+export async function fetchAndCacheEvents(from: Date, to: Date, cacheKey: string): Promise<any[]> {
   try {
     const creds = getIcloudCreds();
     if (!creds.username || !creds.password) {
@@ -1354,5 +1357,130 @@ router.get("/all", requireAdmin, async (req, res) => {
   res.json({ events, cached: false });
 });
 
+router.post("/delete-event", requireAdmin, async (req, res) => {
+  try {
+    const { uid } = req.body;
+    if (!uid) {
+      return res.status(400).json({ error: "Event UID is required" });
+    }
 
-export { router };
+    console.log(`[DELETE] Starting deletion for UID: ${uid}`);
+
+    // First, try to find the event in our cache to get calendar info
+    let targetCalendarUrl = null;
+    let eventFound = false;
+
+    // Search through cached events to find which calendar contains this event
+    const cacheKeys = Object.keys(eventCache);
+    for (const key of cacheKeys) {
+      if (key.includes('icloud') && eventCache[key] && Array.isArray(eventCache[key])) {
+        const events = eventCache[key];
+        for (const event of events) {
+          if (event.uid === uid) {
+            targetCalendarUrl = event.calendarUrl;
+            eventFound = true;
+            console.log(`[DELETE] Found event in cached data, calendar: ${event.calendar || 'unknown'}`);
+            break;
+          }
+        }
+        if (eventFound) break;
+      }
+    }
+
+    const { username, password } = getIcloudCreds();
+    const client = new DAVClient({
+      serverUrl: "https://caldav.icloud.com",
+      credentials: {
+        username,
+        password,
+      },
+      authMethod: "Basic",
+      defaultAccountType: "caldav",
+    });
+
+    // Login to iCloud
+    await client.login();
+
+    let eventDeleted = false;
+
+    if (targetCalendarUrl) {
+      try {
+        // We know which calendar, so fetch only that calendar's objects
+        const calendars = await client.fetchCalendars();
+        const targetCalendar = calendars.find(cal => cal.url === targetCalendarUrl);
+        
+        if (targetCalendar) {
+          console.log(`[DELETE] Searching specific calendar: ${targetCalendar.displayName}`);
+          const calendarObjects = await client.fetchCalendarObjects({
+            calendar: targetCalendar,
+            expand: false,
+          });
+
+          const eventObject = calendarObjects.find(obj => 
+            obj.data && obj.data.includes(`UID:${uid}`)
+          );
+
+          if (eventObject) {
+            await client.deleteCalendarObject({
+              calendarObject: eventObject,
+            });
+            console.log(`[DELETE] Successfully deleted event from ${targetCalendar.displayName}`);
+            eventDeleted = true;
+          }
+        }
+      } catch (calError) {
+        console.log(`[DELETE] Error with targeted deletion:`, calError);
+        // Fall back to broad search
+      }
+    }
+
+    // Fallback: search all calendars if targeted approach failed
+    if (!eventDeleted) {
+      console.log(`[DELETE] Falling back to broad search`);
+      const calendars = await client.fetchCalendars();
+      
+      for (const calendar of calendars) {
+        try {
+          const calendarObjects = await client.fetchCalendarObjects({
+            calendar,
+            expand: false,
+          });
+
+          const eventObject = calendarObjects.find(obj => 
+            obj.data && obj.data.includes(`UID:${uid}`)
+          );
+
+          if (eventObject) {
+            await client.deleteCalendarObject({
+              calendarObject: eventObject,
+            });
+            console.log(`[DELETE] Successfully deleted event from ${calendar.displayName}`);
+            eventDeleted = true;
+            break;
+          }
+        } catch (calError) {
+          console.log(`[DELETE] Error searching ${calendar.displayName}:`, calError);
+        }
+      }
+    }
+
+    if (!eventDeleted) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    // Comprehensive cache invalidation for immediate UI updates
+    const { clearAllCalendarCaches } = await import("../cache");
+    await clearAllCalendarCaches("delete");
+
+    res.json({ success: true, message: "Event deleted successfully" });
+  } catch (error) {
+    console.error("[DELETE] Error deleting event:", error);
+    res.status(500).json({ 
+      error: "Failed to delete event", 
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+
+export { router, getIcloudCreds };
