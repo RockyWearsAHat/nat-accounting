@@ -956,3 +956,274 @@
 *::-webkit-scrollbar-track { background:#0a0a0c; }
 *::-webkit-scrollbar-thumb { background:#26262c; border-radius:4px; }
 *::-webkit-scrollbar-thumb:hover { background:#333; }
+
+/* Meetings Section Styles */
+.meetingsHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 1rem;
+}
+
+.meetingsTabs {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.tabButton {
+	padding: 0.5rem 1rem;
+	border: 1px solid #333;
+	background: #1a1a1a;
+	color: #ccc;
+	cursor: pointer;
+	border-radius: 4px;
+	font-size: 0.875rem;
+	transition: all 0.2s ease;
+}
+
+.tabButton:hover {
+	border-color: #555;
+	background: #2a2a2a;
+}
+
+.tabActive {
+	background: #007AFF !important;
+	color: white !important;
+	border-color: #007AFF !important;
+}
+
+.meetingsContent {
+	min-height: 200px;
+}
+
+.meetingsList {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.meetingCard {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	padding: 1rem;
+	background: #1a1a1a;
+	border: 1px solid #333;
+	border-radius: 6px;
+	transition: all 0.2s ease;
+}
+
+.meetingCard:hover {
+	border-color: #555;
+	background: #222;
+}
+
+.pastMeeting {
+	opacity: 0.7;
+	background: #151515 !important;
+}
+
+.meetingInfo {
+	flex: 1;
+	min-width: 0;
+}
+
+.meetingTitle {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.meetingTitle h5 {
+	margin: 0;
+	font-size: 1rem;
+	color: #fff;
+	font-weight: 600;
+}
+
+.pastLabel {
+	padding: 0.125rem 0.5rem;
+	background: #666;
+	color: white;
+	font-size: 0.75rem;
+	border-radius: 12px;
+	font-weight: 500;
+}
+
+.meetingDetails {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	font-size: 0.875rem;
+}
+
+.meetingTime {
+	color: #007AFF;
+	font-weight: 500;
+}
+
+.clientInfo {
+	color: #ccc;
+}
+
+.meetingLocation {
+	color: #999;
+}
+
+.meetingDescription {
+	color: #bbb;
+	font-style: italic;
+	max-width: 400px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.meetingActions {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	align-items: flex-end;
+	min-width: 120px;
+}
+
+.joinButton {
+	padding: 0.5rem 1rem;
+	background: #28a745;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.875rem;
+	font-weight: 500;
+	transition: background 0.2s ease;
+}
+
+.joinButton:hover {
+	background: #218838;
+}
+
+.rescheduleButton {
+	padding: 0.5rem 1rem;
+	background: #007AFF;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.875rem;
+	font-weight: 500;
+	transition: background 0.2s ease;
+}
+
+.rescheduleButton:hover {
+	background: #0056b3;
+}
+
+.deleteButton {
+	padding: 0.5rem 1rem;
+	background: #dc3545;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.875rem;
+	font-weight: 500;
+	transition: background 0.2s ease;
+}
+
+.deleteButton:hover {
+	background: #c82333;
+}
+
+.approveButton {
+	padding: 0.5rem 1rem;
+	background: #28a745;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.875rem;
+	font-weight: 500;
+	transition: background 0.2s ease;
+}
+
+.approveButton:hover {
+	background: #218838;
+}
+
+.denyButton {
+	padding: 0.5rem 1rem;
+	background: #6c757d;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.875rem;
+	font-weight: 500;
+	transition: background 0.2s ease;
+}
+
+.denyButton:hover {
+	background: #5a6268;
+}
+
+.zoomInfo {
+	font-size: 0.75rem;
+	color: #888;
+	font-family: monospace;
+}
+
+.emptyState {
+	text-align: center;
+	padding: 2rem;
+	color: #666;
+}
+
+.emptyStateSubtext {
+	font-size: 0.875rem;
+	color: #555;
+	margin-top: 0.5rem;
+}
+
+.errorMessage {
+	padding: 1rem;
+	background: #2d1b1b;
+	border: 1px solid #8b0000;
+	border-radius: 4px;
+	color: #ff6b6b;
+	margin-bottom: 1rem;
+}
+
+.statusBadge {
+	padding: 0.25rem 0.5rem;
+	border-radius: 12px;
+	font-size: 0.75rem;
+	font-weight: 500;
+	text-transform: uppercase;
+}
+
+.statusBadge.pending {
+	background: #ffc107;
+	color: #000;
+}
+
+.statusBadge.approved {
+	background: #28a745;
+	color: white;
+}
+
+.statusBadge.denied {
+	background: #dc3545;
+	color: white;
+}
+
+.requestedServices {
+	color: #9c9c9c;
+	font-size: 0.875rem;
+}
+
+.requestDate {
+	color: #777;
+	font-size: 0.8rem;
+}

@@ -167,28 +167,41 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     onClose();
   };
 
-  // Create Zoom meeting immediately (before scheduling)
+  // Create Zoom meeting with actual appointment time
   const createZoomMeeting = async () => {
     setCreatingZoomMeeting(true);
     setError(null);
 
     try {
-      // Create a meeting for "now + 1 hour" as placeholder - will be updated when appointment is scheduled
-      const defaultStart = DateTime.now().setZone(TIMEZONE).plus({ hours: 1 });
+      // Validate that date and time are set
+      if (!form.date || (!form.time && !selectedSlot)) {
+        setError("Please select a date and time before creating a Zoom meeting");
+        setCreatingZoomMeeting(false);
+        return;
+      }
+
+      // Get the actual appointment time
+      let appointmentStart: DateTime;
+      if (selectedSlot) {
+        appointmentStart = DateTime.fromISO(selectedSlot, { zone: TIMEZONE });
+      } else {
+        appointmentStart = DateTime.fromFormat(`${form.date} ${form.time}`, "yyyy-MM-dd HH:mm", { zone: TIMEZONE });
+      }
+
       const clientName = form.name || "Client";
       
       const response = await http.post("/api/zoom/create-meeting", {
         topic: `Consultation with ${clientName}`,
-        startTime: defaultStart.toISO(),
+        startTime: appointmentStart.toISO(),
         duration: parseInt(form.length.toString(), 10) || 30,
-        agenda: `Consultation meeting with ${clientName}`,
+        agenda: `Consultation meeting with ${clientName}. ${form.description ? `Notes: ${form.description}` : ''}`,
         timezone: TIMEZONE
       }) as any;
 
       if (response.success && response.meeting) {
         setForm(f => ({ ...f, videoUrl: response.meeting.join_url }));
         setZoomMeetingId(response.meeting.id.toString());
-        console.log('[Zoom] Meeting created with placeholder time:', response.meeting);
+        console.log('[Zoom] Meeting scheduled for:', appointmentStart.toFormat('yyyy-MM-dd h:mm a'), response.meeting);
       } else {
         throw new Error(response.error || "Failed to create Zoom meeting");
       }
@@ -388,25 +401,32 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
                 <button
                   type="button"
                   onClick={createZoomMeeting}
-                  disabled={creatingZoomMeeting || !!zoomMeetingId}
+                  disabled={creatingZoomMeeting || !!zoomMeetingId || !form.date || (!form.time && !selectedSlot)}
                   style={{
                     padding: '0.5rem 1rem',
                     borderRadius: 8,
                     border: 'none',
-                    background: creatingZoomMeeting ? '#ccc' : zoomMeetingId ? '#28a745' : '#007AFF',
+                    background: creatingZoomMeeting ? '#ccc' : zoomMeetingId ? '#28a745' : (!form.date || (!form.time && !selectedSlot)) ? '#ddd' : '#007AFF',
                     color: 'white',
                     fontWeight: 500,
-                    cursor: (creatingZoomMeeting || zoomMeetingId) ? 'not-allowed' : 'pointer',
+                    cursor: (creatingZoomMeeting || zoomMeetingId || !form.date || (!form.time && !selectedSlot)) ? 'not-allowed' : 'pointer',
                     whiteSpace: 'nowrap',
-                    fontSize: '0.9rem'
+                    fontSize: '0.9rem',
+                    opacity: (!form.date || (!form.time && !selectedSlot)) ? 0.6 : 1
                   }}
+                  title={(!form.date || (!form.time && !selectedSlot)) ? 'Select date and time first' : ''}
                 >
-                  {creatingZoomMeeting ? 'Creating...' : zoomMeetingId ? '✓ Created' : 'Create Zoom'}
+                  {creatingZoomMeeting ? 'Creating...' : zoomMeetingId ? '✓ Scheduled' : 'Create Zoom'}
                 </button>
               </div>
               {zoomMeetingId && (
-                <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#666' }}>
-                  ✓ Zoom meeting created (ID: {zoomMeetingId})
+                <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#28a745' }}>
+                  ✓ Zoom meeting scheduled for {selectedSlot ? 
+                    DateTime.fromISO(selectedSlot, { zone: TIMEZONE }).toFormat('M/d h:mm a') : 
+                    (form.date && form.time ? 
+                      DateTime.fromFormat(`${form.date} ${form.time}`, "yyyy-MM-dd HH:mm", { zone: TIMEZONE }).toFormat('M/d h:mm a') : 
+                      'selected time'
+                    )} (ID: {zoomMeetingId})
                 </div>
               )}
             </label>

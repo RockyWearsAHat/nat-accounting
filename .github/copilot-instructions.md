@@ -244,11 +244,67 @@ Automatically create Zoom meetings when scheduling appointments, with proper cle
 
 **Usage Flow:**
 1. User opens Schedule Appointment Modal
-2. User clicks "Create Zoom" button
-3. Zoom meeting created immediately with placeholder time
-4. Video URL field populated with join link
-5. User schedules appointment → meeting time updated
-6. If user cancels modal → meeting automatically deleted
+2. User selects date and time (or available slot)
+3. User clicks "Create Zoom" button (only enabled when time is selected)
+4. Zoom meeting created with actual appointment time and details
+5. Video URL field populated with join link
+6. User schedules appointment → meeting time already correctly set
+7. If user cancels modal → meeting automatically deleted
+
+**Recent Improvements (Dec 2024):**
+- ✅ **Actual Scheduled Meetings**: Zoom meetings now created with the real appointment time instead of placeholder times
+- ✅ **Smart UI**: "Create Zoom" button only enabled when date and time are selected
+- ✅ **Better Feedback**: Shows scheduled time and meeting ID in success message
+- ✅ **Validation**: Prevents creating meetings without proper appointment time selected
+
+### Meetings Management System (Dec 2024)
+
+**Purpose:**
+Comprehensive meeting management interface for admins to view, manage, and control scheduled appointments with integrated Zoom functionality.
+
+**Core Components:**
+
+**1. MeetingsSection Component (`src/client/components/MeetingsSection.tsx`)**
+- **Two-Tab Interface**: "Scheduled" and "Requested" meetings with counters
+- **Scheduled Meetings**: Lists all future appointments from calendar events
+- **Meeting Controls**: Join meeting, reschedule, and cancel/delete functionality  
+- **Meeting Details**: Client name, date/time, location, description, Zoom info
+- **Status Indicators**: Past meetings dimmed, upcoming meetings highlighted
+- **Professional Styling**: Consistent with existing admin panel design
+
+**2. Meetings API Routes (`src/server/routes/meetings.ts`)**
+- **GET /api/meetings/scheduled**: Fetches future appointments from CachedEventModel
+- **GET /api/meetings/:meetingId**: Get specific meeting details
+- **DELETE /api/meetings/:meetingId**: Cancel meeting and delete associated Zoom meeting
+- **Smart Filtering**: Only shows Business calendar events and events with video URLs
+- **Client Info Extraction**: Parses client names and emails from meeting summaries/descriptions
+
+**3. AdminPanel Integration**
+- **Replaced ConsultationsList**: Old static consultation list replaced with dynamic meetings management
+- **Real-time Updates**: Meeting actions trigger calendar refresh and config updates
+- **Integrated Workflow**: Works seamlessly with ScheduleAppointmentModal and calendar systems
+
+**Key Features:**
+- **Join Meeting Button**: Direct links to Zoom meetings for active appointments
+- **Automatic Zoom Cleanup**: Deleting meetings also removes associated Zoom meetings
+- **Past/Future Distinction**: Visual indicators for meeting status
+- **Client Information**: Extracted from meeting summaries and descriptions
+- **Professional UI**: Clean, intuitive interface matching admin panel design
+- **Error Handling**: Graceful error states and loading indicators
+
+**Current Status:**
+- ✅ Scheduled meetings tab fully functional
+- ✅ Meeting details display with all relevant information
+- ✅ Join, reschedule, and delete controls working
+- ✅ Zoom integration with automatic cleanup
+- ✅ Professional styling consistent with admin panel
+- ⚠️ Requested meetings tab implemented but waiting for consultation request system enhancement
+
+**Architecture Integration:**
+- **Data Source**: CachedEventModel from MongoDB calendar cache
+- **Authentication**: Requires admin authentication for all endpoints
+- **Calendar Sync**: Integrates with existing calendar configuration and sync systems
+- **Zoom Integration**: Uses ZoomService for meeting lifecycle management
 
 ### Memory Bank
 FEEL FREE TO WRITE TO THIS FILE, I ACTUALLY WOULD PREFER YOU TO KEEP THIS FILE UPDATED WITH NEW HELPFUL INFORMATION, BASICALLY AS A REFERENCE. YOU DON'T NEED TO WRITE FIXES/BUG REPORTS OR ANYTHING, BUT WRITE A SUMMARY OF WHAT THE FUNCTION IS, THE ENDPOINT IT CAN BE CALLED AT (IF APPLICABLE) & POSSIBLY FILE LOCATION FOR SIMPLER IMPORTS WHEN REFERENCING, THE PARAMETERS IT TAKES, AND HOW IT ACTUALLY WORKS INTERNALLY, WHAT DOES IT CALL, WHAT FUNCTIONS DOES IT RELY ON. THIS WILL BE HELPFUL TO MAINTAIN DRY CODE AND DEBUG ISSUES E.G. MULTIPLE FUNCTIONS ARE FAILING, THEY MIGHT SHARE A CALL TO ANOTHER FUNCTION THAT IS SILENTLY FAILING, ETC. ALL OF THIS DOCUMENTATION INFORMATION THAT YOU SHOULD REMEMBER CAN BE WRITTEN BELOW IN THE
