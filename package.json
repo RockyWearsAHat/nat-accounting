@@ -4,14 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "pkill -f vite || true && rm server.log || true && touch server.log && vite 2>&1 | tee -a server.log",
     "build": "rm -rf dist && tsc && vite build && rollup -c rollup.config.mjs",
     "build:client": "tsc -p src/client/tsconfig.json && vite build",
     "build:server": "rollup -c rollup.config.mjs",
     "clean": "rm -rf dist",
     "serve": "NODE_ENV=production node dist/server/index.js",
     "start": "NODE_ENV=production node dist/server/index.js",
-    "start:dev": "NODE_ENV=production tsx src/server/index.ts",
     "build:netlify": "npm run clean && npm run build && npm run compress",
     "compress": "find dist/client -name '*.js' -exec gzip -k {} \\; && find dist/client -name '*.css' -exec gzip -k {} \\;",
     "analyze": "npm run build:client && npx vite-bundle-analyzer dist/client"

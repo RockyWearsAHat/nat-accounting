@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { http } from "../lib/http";
-import { CalendarEvent } from "../types/calendar";
+import { CalendarEvent, AvailabilitySlot } from "../types/calendar";
 import styles from "./modernCalendar.module.css";
 import { DateTime } from "luxon";
 
@@ -33,7 +33,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
   const [buffer, setBuffer] = useState<string>("0");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [slots, setSlots] = useState<{ start: string; end: string }[]>([]);
+  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [overlapWarning, setOverlapWarning] = useState<string | null>(null);
@@ -50,7 +50,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     if (form.date && form.length) {
       let bufNum = parseInt(buffer, 10);
       if (isNaN(bufNum) || bufNum < 0) bufNum = 0;
-  http.get<{ slots: { start: string; end: string }[] }>(`/api/availability`, {
+  http.get<{ slots: AvailabilitySlot[] }>(`/api/availability`, {
         date: form.date,
         duration: form.length,
         buffer: bufNum,
@@ -94,12 +94,17 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     const start = DateTime.fromISO(`${form.date}T${form.time}`, { zone: TIMEZONE });
     const end = start.plus({ minutes: Number(form.length) });
     const overlap = events.find(ev => {
-      const evStart = DateTime.fromISO(ev.start, { zone: TIMEZONE });
-      const evEnd = ev.end ? DateTime.fromISO(ev.end, { zone: TIMEZONE }) : evStart.plus({ minutes: 30 });
+      // Events from API are already in UTC, so we convert them properly to local time for comparison
+      // The fromISO() already handles UTC conversion, we just need to convert to the same timezone for comparison
+      const evStart = DateTime.fromISO(ev.start).setZone(TIMEZONE);
+      const evEnd = ev.end ? DateTime.fromISO(ev.end).setZone(TIMEZONE) : evStart.plus({ minutes: 30 });
       return (start < evEnd && end > evStart);
     });
     if (overlap) {
-      setOverlapWarning(`This appointment overlaps with "${overlap.summary}" (${DateTime.fromISO(overlap.start, { zone: TIMEZONE }).toLocaleString(DateTime.TIME_SIMPLE)} - ${overlap.end ? DateTime.fromISO(overlap.end, { zone: TIMEZONE }).toLocaleString(DateTime.TIME_SIMPLE) : ''}). Are you sure?`);
+      // For display, show the event times in local timezone
+      const displayStart = DateTime.fromISO(overlap.start).setZone(TIMEZONE);
+      const displayEnd = overlap.end ? DateTime.fromISO(overlap.end).setZone(TIMEZONE) : displayStart.plus({ minutes: 30 });
+      setOverlapWarning(`This appointment overlaps with "${overlap.summary}" (${displayStart.toLocaleString(DateTime.TIME_SIMPLE)} - ${displayEnd.toLocaleString(DateTime.TIME_SIMPLE)}). Are you sure?`);
     } else {
       setOverlapWarning(null);
     }
@@ -132,7 +137,20 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
           provider: "icloud",
         }),
       });
-      if (!res.ok) throw new Error("Failed to schedule appointment");
+      
+      if (!res.ok) {
+        let errorMessage = "Failed to schedule appointment";
+        try {
+          const errorData = await res.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (parseError) {
+          // If we can't parse the error response, use the status text
+          errorMessage = `Failed to schedule appointment: ${res.status} ${res.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
       onScheduled();
       onClose();
     } catch (e: any) {
@@ -271,9 +289,21 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>Available Timeslots:</div>
                 <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8, padding: 8, background: '#fafbfc', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {slots.filter(slot => {
-                    // Only show slots that start in the future (not in the past)
+                    // Only show available slots
+                    if (!slot.available) return false;
+                    
+                    // If the selected date is today, only show slots that haven't passed yet
                     const slotStart = DateTime.fromISO(slot.start, { zone: TIMEZONE });
-                    return slotStart > DateTime.now().setZone(TIMEZONE);
+                    const selectedDate = DateTime.fromISO(form.date, { zone: TIMEZONE });
+                    const today = DateTime.now().setZone(TIMEZONE);
+                    
+                    // If scheduling for today, filter out past slots
+                    if (selectedDate.hasSame(today, 'day')) {
+                      return slotStart > today;
+                    }
+                    
+                    // If scheduling for a future date, show all available slots
+                    return true;
                   }).map(slot => {
                     const slotStart = DateTime.fromISO(slot.start, { zone: TIMEZONE });
                     const slotEnd = DateTime.fromISO(slot.end, { zone: TIMEZONE });

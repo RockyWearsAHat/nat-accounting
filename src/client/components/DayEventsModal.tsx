@@ -6,32 +6,25 @@ import { EventModal } from "./EventModal";
 import { http } from "../lib/http";
 import { CalendarEvent, CalendarConfig } from "../types/calendar";
 
-// Date parsing helper for timezone-corrected events
-// The backend normalizes timestamps to .000Z format, but they represent local Mountain Time
+// Date parsing helper for timezone-corrected events (consistent with WeeklyCalendar)
 function getDateParts(dateISO: string) {
   try {
-    // Parse the ISO string directly as local time (no timezone conversion)
-    // The server already normalizes timestamps to represent Mountain Time
-    const match = dateISO.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.000Z$/);
-    if (match) {
-      const [, year, month, day, hour, minute] = match;
-      return {
-        year,
-        month,
-        day,
-        hour: parseInt(hour, 10),
-        minute: parseInt(minute, 10),
-      };
+    // Always use Date object to properly handle timezone conversion
+    // This ensures UTC timestamps are converted to local time for display
+    const date = new Date(dateISO);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.warn(`[DayEventsModal] Invalid date: ${dateISO}`);
+      return { year: '1970', month: '01', day: '01', hour: 0, minute: 0 };
     }
     
-    // Fallback to Date parsing (but this may cause timezone issues)
-    const date = new Date(dateISO);
     return {
       year: date.getFullYear().toString(),
       month: (date.getMonth() + 1).toString().padStart(2, '0'),
       day: date.getDate().toString().padStart(2, '0'),
-      hour: date.getHours(),
-      minute: date.getMinutes(),
+      hour: date.getHours(), // This gives local hours
+      minute: date.getMinutes(), // This gives local minutes
     };
   } catch (error) {
     console.warn('Failed to parse date:', dateISO, error);
@@ -82,6 +75,39 @@ interface DayEventsModalProps {
 // (removed stray destructuring block)
 export function DayEventsModal(props: DayEventsModalProps) {
   const { day, month, year, events, config, hours, onClose, onConfigUpdate, onNavigateDay, footer } = props;
+  
+  // IMMEDIATE DEBUG: Log what we receive
+  console.log(`[DayEventsModal] PROPS DEBUG:`, {
+    day, month, year,
+    eventsCount: events?.length || 0,
+    configExists: !!config,
+    configCalendarsCount: config?.calendars?.length || 0
+  });
+  console.log(`[DayEventsModal] RAW EVENTS:`, events);
+  
+  // DEBUG: Specifically check for iCloud vs Google all-day events
+  const allDayEventsRaw = events.filter(ev => !ev.start.includes('T'));
+  const iCloudAllDay = allDayEventsRaw.filter(ev => ev.calendarUrl?.includes('icloud'));
+  const googleAllDay = allDayEventsRaw.filter(ev => ev.calendarUrl?.includes('google'));
+  
+  console.log(`[DayEventsModal] ALL-DAY ANALYSIS:`, {
+    totalAllDay: allDayEventsRaw.length,
+    iCloudAllDay: iCloudAllDay.length,
+    googleAllDay: googleAllDay.length,
+    iCloudEvents: iCloudAllDay.map(ev => ({ 
+      summary: ev.summary, 
+      start: ev.start, 
+      calendarUrl: ev.calendarUrl,
+      calendar: ev.calendar
+    })),
+    googleEvents: googleAllDay.map(ev => ({ 
+      summary: ev.summary, 
+      start: ev.start, 
+      calendarUrl: ev.calendarUrl,
+      calendar: ev.calendar
+    }))
+  });
+  
   const [nowTick, setNowTick] = useState(Date.now());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -138,9 +164,25 @@ export function DayEventsModal(props: DayEventsModalProps) {
     return isCalendarBusy || isForcedBusy;
   });
 
+  // Debug logging
+  console.log(`[DayEventsModal] Date: ${dateStr}`);
+  console.log(`[DayEventsModal] Config calendars:`, config?.calendars?.map(c => ({url: c.url, busy: c.busy, displayName: c.displayName})));
+  console.log(`[DayEventsModal] Total events from backend: ${events.length}`);
+  console.log(`[DayEventsModal] Filtered relevant events: ${relevantEvents.length}`);
+  console.log(`[DayEventsModal] Events by type:`, events.map(ev => ({
+    summary: ev.summary,
+    calendarUrl: ev.calendarUrl,
+    calendar: ev.calendar,
+    isAllDay: !ev.start.includes('T'),
+    start: ev.start
+  })));
+
   // Separate all-day and timed events (fix: use generic filter since allDay may not exist)
   const allDayEvents = relevantEvents.filter(ev => !ev.start.includes('T'));
   const timedEvents = relevantEvents.filter(ev => ev.start.includes('T'));
+
+  console.log(`[DayEventsModal] All-day events: ${allDayEvents.length}`, allDayEvents.map(ev => ev.summary));
+  console.log(`[DayEventsModal] Timed events: ${timedEvents.length}`, timedEvents.map(ev => ev.summary));
 
   // Process timed events with the same logic as WeeklyCalendar
   const windowStartMinutes = startHour * 60;
@@ -580,6 +622,7 @@ export function DayEventsModal(props: DayEventsModalProps) {
                   {/* Time column - scrolls with content */}
                   <div style={{
                     background: '#121216',
+                    borderRight: '1px solid #1e1e24',
                     position: 'relative',
                     fontVariantNumeric: 'tabular-nums',
                     padding: '0',
