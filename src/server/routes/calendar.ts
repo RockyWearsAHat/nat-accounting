@@ -16,7 +16,7 @@ function requireAdmin(req: any, res: any, next: any) {
 // Clean, robust /schedule endpoint using shared iCloud session/cache state and strict Mountain Time
 router.post("/schedule", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { start, end, summary, description = "", location = "", videoUrl = "", calendarId, provider, lengthMinutes } = req.body;
+    const { start, end, summary, description = "", location = "", videoUrl = "", zoomMeetingId = "", calendarId, provider, lengthMinutes } = req.body;
     if (!start || !summary || !calendarId || !provider) {
       return res.status(400).json({ error: "Missing required fields" });
     }
@@ -129,6 +129,7 @@ router.post("/schedule", requireAuth, requireAdmin, async (req, res) => {
       if (description) icsLines.push(`DESCRIPTION:${description}`);
       if (location) icsLines.push(`LOCATION:${location}`);
       if (videoUrl) icsLines.push(`URL:${videoUrl}`);
+      if (zoomMeetingId) icsLines.push(`X-ZOOM-MEETING-ID:${zoomMeetingId}`);
       icsLines.push('END:VEVENT', 'END:VCALENDAR');
       let icsString = icsLines.join('\r\n');
       console.log('[calendar][schedule] ICS string to upload:', icsString);
