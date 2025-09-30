@@ -63,13 +63,14 @@ const startServer = async () => {
 
   // Import and mount routes AFTER database is connected
   const { router: consultationRouter } = await import("./routes/consultations");
-  const { router: availabilityRouter } = await import("./routes/availability");
+  const { default: availabilityRouter } = await import("./routes/availability-simple");
   const { router: scheduleRouter } = await import("./routes/schedule");
   const { router: authRouter } = await import("./routes/auth");
   const { router: calendarRouter } = await import("./routes/calendar");
   const { router: icloudRouter } = await import("./routes/icloud");
   const { router: googleRouter } = await import("./routes/google");
   const { router: mergedRouter } = await import("./routes/merged");
+  const { router: cachedRouter } = await import("./routes/cached");
   const { router: hoursRouter } = await import("./routes/hours");
   const { router: settingsRouter } = await import("./routes/settings");
   const { router: debugRouter } = await import("./routes/debug");
@@ -82,14 +83,32 @@ const startServer = async () => {
   app.use("/api/calendar", calendarRouter);
   app.use("/api/icloud", icloudRouter);
   app.use("/api/google", googleRouter);
+  app.use("/api/cached", cachedRouter);
   app.use("/api/merged", mergedRouter);
   app.use("/api/hours", hoursRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/debug", debugRouter);
 
+  // Initialize calendar cache immediately on startup
+  console.log("🚀 Starting calendar cache initialization...");
+  const { initializeCalendarCache, startBackgroundSync } = await import("./services/CalendarInitializer");
+  
+  // Populate cache with all existing events on startup
+  try {
+    console.log("📅 Calling initializeCalendarCache...");
+    await initializeCalendarCache();
+    console.log("✅ Calendar cache populated successfully");
+  } catch (error) {
+    console.error("❌ Calendar cache initialization failed:", error);
+    // Continue startup even if cache init fails
+  }
+  
+  // Start background sync for ongoing updates
+  startBackgroundSync();
+
   if (process.env && process.env["VITE"]) {
     // If running in dev, just run the server from vite, vite plugin to run express is used (SEE vite.config.ts)
-    console.log("Running in dev mode - routes mounted, ready for requests");
+    console.log("Running in dev mode - routes mounted, sync service initialized, ready for requests");
     // DO NOT mount express.static or catch-all route in dev mode, but routes are already mounted above!
     return;
   } else {

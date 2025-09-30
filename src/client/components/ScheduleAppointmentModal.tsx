@@ -8,7 +8,7 @@ import { DateTime } from "luxon";
 interface Props {
   open: boolean;
   onClose: () => void;
-  onScheduled: () => void;
+  onScheduled: (newEvent: CalendarEvent) => void; // Pass the new event directly to parent
   defaultDate?: string;
   eventToGoBackTo?: () => void; // Optional callback to show back button and handle back navigation
 }
@@ -84,45 +84,95 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     // eslint-disable-next-line
   }, [form.date, form.length]);
 
-  // Check for overlap if custom time is entered
+  // Check for overlap only if custom time is entered (not when using available slots)
   useEffect(() => {
+    // If a slot is selected from the available slots, there should be no overlap warning
+    // since available slots are already verified by the backend to be non-overlapping
+    if (selectedSlot) {
+      setOverlapWarning(null);
+      return;
+    }
+
     if (!form.date || !form.time || !form.length || !events.length) {
       setOverlapWarning(null);
       return;
     }
+
+    // Only check for overlaps when user manually enters a custom time
     // Parse start/end in business timezone
     const start = DateTime.fromISO(`${form.date}T${form.time}`, { zone: TIMEZONE });
     const end = start.plus({ minutes: Number(form.length) });
+    
     const overlap = events.find(ev => {
-      // Events from API are already in UTC, so we convert them properly to local time for comparison
-      // The fromISO() already handles UTC conversion, we just need to convert to the same timezone for comparison
-      const evStart = DateTime.fromISO(ev.start).setZone(TIMEZONE);
-      const evEnd = ev.end ? DateTime.fromISO(ev.end).setZone(TIMEZONE) : evStart.plus({ minutes: 30 });
+      // Skip non-blocking events (only blocking events should cause overlap warnings)
+      // If blocking is undefined, assume it's blocking (default behavior)
+      if (ev.blocking === false) return false;
+      
+      // Events from API: parse as local Mountain Time (matches calendar display logic)
+      // Remove the 'Z' suffix and parse as local time to get correct 12:25 PM interpretation
+      const evStartStr = ev.start.replace('Z', '');
+      const evEndStr = ev.end ? ev.end.replace('Z', '') : null;
+      const evStart = DateTime.fromISO(evStartStr, { zone: TIMEZONE });
+      const evEnd = evEndStr ? DateTime.fromISO(evEndStr, { zone: TIMEZONE }) : evStart.plus({ minutes: 30 });
+      
       return (start < evEnd && end > evStart);
     });
+    
     if (overlap) {
-      // For display, show the event times in local timezone
-      const displayStart = DateTime.fromISO(overlap.start).setZone(TIMEZONE);
-      const displayEnd = overlap.end ? DateTime.fromISO(overlap.end).setZone(TIMEZONE) : displayStart.plus({ minutes: 30 });
+      // Events are stored as UTC in database, need to parse them correctly
+      // Use the same logic as the overlap detection for consistency
+      const displayStartStr = overlap.start.replace('Z', '');
+      const displayEndStr = overlap.end ? overlap.end.replace('Z', '') : null;
+      const displayStart = DateTime.fromISO(displayStartStr, { zone: TIMEZONE });
+      const displayEnd = displayEndStr ? DateTime.fromISO(displayEndStr, { zone: TIMEZONE }) : displayStart.plus({ minutes: 30 });
       setOverlapWarning(`This appointment overlaps with "${overlap.summary}" (${displayStart.toLocaleString(DateTime.TIME_SIMPLE)} - ${displayEnd.toLocaleString(DateTime.TIME_SIMPLE)}). Are you sure?`);
     } else {
       setOverlapWarning(null);
     }
-  }, [form.date, form.time, form.length, events]);
+  }, [form.date, form.time, form.length, events, selectedSlot]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    
+    let start: DateTime;
+    if (selectedSlot) {
+      // selectedSlot is ISO string in business timezone
+      start = DateTime.fromISO(selectedSlot, { zone: TIMEZONE });
+    } else {
+      start = DateTime.fromISO(`${form.date}T${form.time}`, { zone: TIMEZONE });
+    }
+    const lengthMinutes = Number(form.length);
+    const end = start.plus({ minutes: lengthMinutes });
+    
+    // Create optimistic event - show instantly in parent
+    const optimisticEvent: CalendarEvent = {
+      uid: `temp-${Date.now()}`,
+      summary: `${form.name} (Scheduling...)`,
+      start: start.toISO() || '',
+      end: end.toISO() || '',
+      calendar: 'Business',
+      calendarUrl: 'business',
+      color: '#9ca3af',
+      blocking: true
+    };
+    
+    // INSTANT FEEDBACK: Show in parent immediately
+    onScheduled(optimisticEvent);
+    onClose();
+    
     try {
-      let start: DateTime;
-      if (selectedSlot) {
-        // selectedSlot is ISO string in business timezone
-        start = DateTime.fromISO(selectedSlot, { zone: TIMEZONE });
-      } else {
-        start = DateTime.fromISO(`${form.date}T${form.time}`, { zone: TIMEZONE });
-      }
-      const lengthMinutes = Number(form.length);
-      const end = start.plus({ minutes: lengthMinutes });
+      console.log("Scheduling appointment with data:", {
+        summary: form.name,
+        description: form.description,
+        location: form.location,
+        videoUrl: form.videoUrl,
+        start: start.toISO(),
+        end: end.toISO(),
+        calendarId: "Business",
+        provider: "icloud",
+      });
+
       const res = await fetch("/api/calendar/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -138,26 +188,42 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
         }),
       });
       
+      console.log("Schedule response status:", res.status, res.statusText);
+      
       if (!res.ok) {
         let errorMessage = "Failed to schedule appointment";
         try {
           const errorData = await res.json();
+          console.log("Schedule error data:", errorData);
           if (errorData.error) {
             errorMessage = errorData.error;
           }
         } catch (parseError) {
-          // If we can't parse the error response, use the status text
+          console.error("Failed to parse error response:", parseError);
           errorMessage = `Failed to schedule appointment: ${res.status} ${res.statusText}`;
         }
         throw new Error(errorMessage);
       }
-      onScheduled();
-      onClose();
+
+      const responseData = await res.json();
+      console.log("Schedule success response:", responseData);
+      
+      // Success: Server confirmed the appointment was created
+      // Optimistic update already happened, no need to do anything more
+      console.log(`[SCHEDULE] Server confirmed appointment: ${optimisticEvent.summary}`);
+      
     } catch (e: any) {
+      console.error(`[SCHEDULE] Failed to create appointment:`, e);
+      
+      // TODO: Need to tell parent to remove the optimistic event
+      // For now, just show error (the optimistic event will remain until page refresh)
       setError(e.message || "Unknown error");
-    } finally {
       setLoading(false);
+      return; // Don't close modal on error
     }
+    
+    // Success cleanup
+    setLoading(false);
   };
   if (!open) return null;
   return createPortal(

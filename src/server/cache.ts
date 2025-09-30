@@ -179,3 +179,54 @@ export async function invalidateCache(pattern?: string): Promise<void> {
     console.warn("[Cache] Error invalidating cache:", error);
   }
 }
+
+// Import this to access the internal eventCache from icloud.ts
+let icloudEventCache: Record<string, any[]> | null = null;
+
+export function setIcloudEventCache(cache: Record<string, any[]>): void {
+  icloudEventCache = cache;
+}
+
+export async function clearAllCalendarCaches(context = "unknown"): Promise<void> {
+  try {
+    let clearedCount = 0;
+    
+    // Clear iCloud in-memory cache if available
+    if (icloudEventCache) {
+      const memoryCacheKeys = Object.keys(icloudEventCache);
+      memoryCacheKeys.forEach(key => {
+        if (key.includes('icloud') || key.includes('merged') || key.includes('google')) {
+          delete icloudEventCache![key];
+          clearedCount++;
+        }
+      });
+    }
+
+    // Clear new cache system with comprehensive patterns
+    const cache = getCache();
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    
+    const cachePatterns = [
+      // All events endpoints
+      'icloud:all', 'merged:all', 'google:all',
+      // Daily endpoints for today and nearby dates
+      `icloud:day:${today}`, `icloud:day:${yesterday}`, `icloud:day:${tomorrow}`,
+      `merged:day:${today}`, `merged:day:${yesterday}`, `merged:day:${tomorrow}`, 
+      // Weekly and monthly
+      'icloud:week', 'icloud:month', 'merged:week', 'merged:month',
+      'google:week', 'google:month',
+      // Config caches
+      'icloud:config', 'calendar:config'
+    ];
+    
+    for (const pattern of cachePatterns) {
+      await cache.del(pattern);
+    }
+    
+    console.log(`[${context.toUpperCase()}] Cleared ${clearedCount} memory entries + ${cachePatterns.length} new cache patterns`);
+  } catch (error) {
+    console.warn(`[${context.toUpperCase()}] Error clearing caches:`, error);
+  }
+}
