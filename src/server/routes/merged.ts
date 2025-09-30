@@ -163,4 +163,98 @@ router.get("/week", requireAdmin, async (req, res) => {
   });
 });
 
+router.get("/all", requireAdmin, async (req, res) => {
+  const sourcesParam = String(req.query.sources || "icloud,google")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const sources = new Set(sourcesParam.length ? sourcesParam : ["icloud", "google"]);
+
+  const blockingOnly = req.query.blockingOnly === "1";
+  const calendarUrlsFilterRaw = String(req.query.calendarUrls || "").trim();
+  const calendarUrlFilters = calendarUrlsFilterRaw
+    ? new Set(
+        calendarUrlsFilterRaw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    : null;
+
+  const headers: Record<string, string> = {};
+  // Forward auth cookies (session) if present
+  if (req.headers.cookie) headers["cookie"] = req.headers.cookie as string;
+
+  // Use absolute URLs for internal fetches
+  const sourceCounts: Record<string, number> = {};
+  const events: any[] = [];
+  const fetches: Promise<void>[] = [];
+
+  async function pullAll(source: string, urlPath: string) {
+    try {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const url = `${baseUrl}${urlPath}`;
+      const r = await (globalThis as any).fetch(url, { headers });
+      if (!r.ok) {
+        console.warn(`[merged] ${source} fetch failed status=${r.status}`);
+        return;
+      }
+      const data = await r.json();
+      const list = Array.isArray(data.events) ? data.events : [];
+      sourceCounts[source] = list.length;
+      for (const ev of list) {
+        // Tag source for downstream UI logic (if needed)
+        ev._source = source;
+        
+        // Normalize timestamps to consistent .000Z UTC format
+        if (ev.start) {
+          ev.start = normalizeTimestampFormat(ev.start);
+        }
+        if (ev.end) {
+          ev.end = normalizeTimestampFormat(ev.end);
+        }
+        
+        events.push(ev);
+      }
+    } catch (e: any) {
+      console.warn(`[merged] ${source} fetch exception`, e?.message || e);
+    }
+  }
+
+  if (sources.has("icloud")) fetches.push(pullAll("icloud", "/api/icloud/all"));
+  if (sources.has("google")) fetches.push(pullAll("google", "/api/google/all"));
+
+  await Promise.all(fetches);
+
+  // Dedupe: same uid + start
+  const dedupMap = new Map<string, any>();
+  for (const ev of events) {
+    const key = `${ev.uid || ev.summary}-${ev.start}`;
+    if (!dedupMap.has(key)) dedupMap.set(key, ev);
+  }
+  let merged = Array.from(dedupMap.values());
+
+  // Optional blocking filter
+  if (blockingOnly) merged = merged.filter((e) => e.blocking === true);
+  const afterBlocking = merged.length;
+
+  // Optional calendar URL filter
+  if (calendarUrlFilters && calendarUrlFilters.size) {
+    merged = merged.filter((e) => !e.calendarUrl || calendarUrlFilters.has(e.calendarUrl));
+  }
+  const afterCalendarFilter = merged.length;
+
+  merged.sort((a, b) => String(a.start).localeCompare(String(b.start)));
+
+  res.json({
+    events: merged,
+    meta: {
+      sourceCounts,
+      filtered: { afterBlocking, afterCalendarFilter },
+      sources: Array.from(sources),
+    },
+  });
+  return;
+});
+
 export { router };

@@ -72,6 +72,7 @@ const startServer = async () => {
   const { router: mergedRouter } = await import("./routes/merged");
   const { router: hoursRouter } = await import("./routes/hours");
   const { router: settingsRouter } = await import("./routes/settings");
+  const { router: debugRouter } = await import("./routes/debug");
 
   // Mount all API routes AFTER database connection
   app.use("/api/auth", authRouter);
@@ -84,11 +85,13 @@ const startServer = async () => {
   app.use("/api/merged", mergedRouter);
   app.use("/api/hours", hoursRouter);
   app.use("/api/settings", settingsRouter);
+  app.use("/api/debug", debugRouter);
 
   if (process.env && process.env["VITE"]) {
     // If running in dev, just run the server from vite, vite plugin to run express is used (SEE vite.config.ts)
-    return console.log("Running in dev mode");
-    // DO NOT mount express.static or catch-all route in dev mode!
+    console.log("Running in dev mode - routes mounted, ready for requests");
+    // DO NOT mount express.static or catch-all route in dev mode, but routes are already mounted above!
+    return;
   } else {
     // Serve static files from dist (not public) in production
     const frontendFiles = process.cwd() + "/dist/client/";

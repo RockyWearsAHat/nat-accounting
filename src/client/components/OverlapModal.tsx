@@ -10,33 +10,34 @@ interface OverlapModalProps {
 }
 
 export const OverlapModal: React.FC<OverlapModalProps> = ({ events, config, onClose, onEventSelect }) => {
-  // Parse time directly without timezone conversion (already Mountain Time)
-  const parseEventTime = (dateISO: string) => {
-    const match = dateISO.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.000Z$/);
-    if (match) {
-      const [, year, month, day, hour, minute] = match;
+  // Use proper timezone conversion (consistent with WeeklyCalendar)
+  const getDateParts = (dateISO: string) => {
+    try {
+      // Always use Date object to properly handle timezone conversion
+      // This ensures UTC timestamps are converted to local time for display
+      const date = new Date(dateISO);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn(`[OverlapModal] Invalid date: ${dateISO}`);
+        return { year: 1970, month: 1, day: 1, hour: 0, minute: 0 };
+      }
+      
       return {
-        year: parseInt(year, 10),
-        month: parseInt(month, 10),
-        day: parseInt(day, 10), 
-        hour: parseInt(hour, 10),
-        minute: parseInt(minute, 10),
+        year: date.getFullYear(),
+        month: date.getMonth() + 1,
+        day: date.getDate(),
+        hour: date.getHours(), // This gives local hours
+        minute: date.getMinutes(), // This gives local minutes
       };
+    } catch {
+      return { year: 1970, month: 1, day: 1, hour: 0, minute: 0 };
     }
-    // Fallback to Date parsing (may cause timezone issues)
-    const date = new Date(dateISO);
-    return {
-      year: date.getFullYear(),
-      month: date.getMonth() + 1,
-      day: date.getDate(),
-      hour: date.getHours(),
-      minute: date.getMinutes(),
-    };
   };
 
   const formatEventTime = (event: CalendarEvent) => {
-    const startParts = parseEventTime(event.start);
-    const endParts = event.end ? parseEventTime(event.end) : null;
+    const startParts = getDateParts(event.start);
+    const endParts = event.end ? getDateParts(event.end) : null;
     
     const formatTime = (hour: number, minute: number) => {
       const displayHour = hour % 12 || 12;

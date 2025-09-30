@@ -1,12 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { resolve } from "node:path";
-import expressPlugin from "./vite.express";
+import express from "./vite.express";
 
 export default defineConfig(({ command, mode }) => {
   return {
     root: resolve(__dirname, "src/client"),
-    plugins: [react(), expressPlugin("../server/index.ts")],
+    plugins: [react(), express("../server/index.ts")],
     server: {
       port: 4000,
       // Ensure proper MIME types for modules

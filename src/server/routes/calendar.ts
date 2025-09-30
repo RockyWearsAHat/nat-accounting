@@ -2,11 +2,19 @@ import { Router } from "express";
 import { createObject, fetchCalendars, DAVClient } from "tsdav";
 import { getSession, getCalendarsCache } from "../icloudSession";
 import { DateTime } from "luxon";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
+function requireAdmin(req: any, res: any, next: any) {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
 // Clean, robust /schedule endpoint using shared iCloud session/cache state and strict Mountain Time
-router.post("/schedule", async (req, res) => {
+router.post("/schedule", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { start, end, summary, description = "", location = "", videoUrl = "", calendarId, provider, lengthMinutes } = req.body;
     if (!start || !summary || !calendarId || !provider) {
@@ -25,16 +33,39 @@ router.post("/schedule", async (req, res) => {
       mountainEnd = mountainStart.plus({ minutes: 30 });
     }
 
-  if (provider === "icloud") {
-      const session = getSession();
-      const calendarsCache = getCalendarsCache();
-      if (!session || !calendarsCache) {
-        return res.status(401).json({ error: "iCloud session not initialized" });
+    if (provider === "icloud") {
+      // Get iCloud credentials directly like other iCloud endpoints do
+      function getIcloudCreds() {
+        const appleId = process.env.APPLE_ID;
+        const appPassword = process.env.APPLE_APP_PASSWORD;
+        if (!appleId || !appPassword) {
+          throw new Error("Missing APPLE_ID or APPLE_APP_PASSWORD environment variables");
+        }
+        return { appleId, appPassword };
       }
-  const calendar = calendarsCache.find((c) => c.displayName === "Business" || c.id === calendarId || c.url === calendarId);
-      if (!calendar) {
+
+      const creds = getIcloudCreds();
+      
+      // Find the Business calendar by fetching current calendars
+      const davClient = new DAVClient({
+        serverUrl: "https://caldav.icloud.com",
+        credentials: {
+          username: creds.appleId,
+          password: creds.appPassword,
+        },
+        authMethod: "Basic",
+        defaultAccountType: "caldav",
+      });
+
+      await davClient.login();
+      const calendars = await davClient.fetchCalendars();
+      console.log('[calendar][schedule] Available calendars:', calendars.map(c => ({ displayName: c.displayName, url: c.url })));
+      
+      const targetCalendar = calendars.find((c) => c.displayName === "Business" || c.displayName === calendarId || c.url === calendarId);
+      if (!targetCalendar) {
         return res.status(404).json({ error: "Calendar not found" });
       }
+      
       // Use tsdav to create event
       // Minimal ICS string builder for iCloud
       function pad(n: number) { return n < 10 ? '0' + n : n.toString(); }
@@ -100,32 +131,36 @@ router.post("/schedule", async (req, res) => {
       if (videoUrl) icsLines.push(`URL:${videoUrl}`);
       icsLines.push('END:VEVENT', 'END:VCALENDAR');
       let icsString = icsLines.join('\r\n');
-      console.log('[icloud][create] ICS string to upload:', icsString);
-  try {
-        console.log('[icloud][create] Attempting to create event on calendar:', calendar.displayName, 'URL:', calendar.url);
-        console.log('[icloud][create] Session appleId:', session?.appleId);
+      console.log('[calendar][schedule] ICS string to upload:', icsString);
+      
+      try {
+        console.log('[calendar][schedule] Attempting to create event on calendar:', targetCalendar.displayName, 'URL:', targetCalendar.url);
+        
         // Add Basic Auth header for iCloud CalDAV
-        const authHeader =
-          session?.appleId && session?.appPassword
-            ? {
-                Authorization:
-                  "Basic " + Buffer.from(session.appleId + ":" + session.appPassword).toString("base64"),
-              }
-            : {};
+        const authHeader = {
+          Authorization: "Basic " + Buffer.from(creds.appleId + ":" + creds.appPassword).toString("base64"),
+        };
+        
         // Use PUT with unique .ics filename, set Content-Type header
         const icsFilename = `${uid}.ics`;
-        const uploadUrl = calendar.url.endsWith('/') ? calendar.url + icsFilename : calendar.url + '/' + icsFilename;
+        const uploadUrl = targetCalendar.url.endsWith('/') ? targetCalendar.url + icsFilename : targetCalendar.url + '/' + icsFilename;
         const result = await fetch(uploadUrl, {
           method: 'PUT',
           headers: {
-            ...(authHeader.Authorization ? { 'Authorization': authHeader.Authorization } : {}),
+            'Authorization': authHeader.Authorization,
             'Content-Type': 'text/calendar; charset=utf-8',
-          } as Record<string, string>,
+          },
           body: icsString,
         });
-        console.log('[icloud][create] createObject result:', result);
-  // Invalidate day and week cache for this date
-  const { invalidateCache, createCacheKey } = await import("../cache");
+        console.log('[calendar][schedule] Upload result status:', result.status, result.statusText);
+        if (!result.ok) {
+          const errorText = await result.text();
+          console.error('[calendar][schedule] Upload failed:', result.status, result.statusText, errorText);
+          return res.status(500).json({ error: 'Failed to upload event to iCloud', details: `${result.status} ${result.statusText}` });
+        }
+
+        // Invalidate day and week cache for this date
+        const { invalidateCache, createCacheKey } = await import("../cache");
         const eventDate = mountainStart.toISODate();
         if (eventDate) {
           // Invalidate day cache
@@ -138,9 +173,10 @@ router.post("/schedule", async (req, res) => {
         if (weekStart && weekEnd) {
           await invalidateCache(createCacheKey("icloud", "week", weekStart, weekEnd));
         }
-  return res.json({ success: true, result });
+        
+        return res.json({ success: true, uid, calendar: targetCalendar.displayName });
       } catch (err) {
-        console.error('[icloud][create] Error creating event:', err);
+        console.error('[calendar][schedule] Error creating event:', err);
         let message = 'Unknown error';
         if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
           message = (err as any).message;

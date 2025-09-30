@@ -6,6 +6,7 @@ import { CalendarConfigModel } from "../models/CalendarConfig";
 import { getAuthorizedClient } from "./google";
 import { google } from "googleapis";
 import { connect as connectMongo } from "../mongo";
+import { getCache } from "../cache";
 
 const { rrulestr } = rrulePkg;
 const eventCache: Record<string, any[]> = {};
@@ -108,7 +109,8 @@ function parseICalDate(val: string): Date {
     const year = val.slice(0,4);
     const month = val.slice(4,6);
     const day = val.slice(6,8);
-    const result = new Date(`${year}-${month}-${day}T00:00:00`);
+    // Create UTC date for all-day events to avoid timezone offset issues
+    const result = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
     console.log(`[parseICalDate] All-day event: ${result.toISOString()}`);
     return result;
   }
@@ -201,8 +203,9 @@ function parseICalEvents(objects: any[], from: Date, to: Date) {
         }
       }
     } else {
-      // Non-recurring event
-      if (startDate <= to && endDate >= from) {
+      // Non-recurring event - include ALL non-recurring events regardless of date
+      const isInRange = startDate <= to && endDate >= from;
+      if (isInRange) {
         events.push({
           uid,
           summary,
@@ -215,6 +218,76 @@ function parseICalEvents(objects: any[], from: Date, to: Date) {
     }
   }
   
+  return events;
+}
+
+// Function to parse iCal events WITHOUT date filtering - for /all endpoint
+function parseICalEventsAll(objects: any[]) {
+  const events = [];
+  
+  console.log(`🚨 [parseICalEventsAll] CALLED! Processing ${objects.length} calendar objects`);
+  
+  for (const obj of objects) {
+    if (!obj?.data || !obj.data.includes('BEGIN:VEVENT')) continue;
+    
+    const dtstartMatch = obj.data.match(/DTSTART([^:]*):(.+)/);
+    const dtendMatch = obj.data.match(/DTEND([^:]*):(.+)/);
+    const uid = obj.data.match(/UID:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || 'unknown';
+    const summary = obj.data.match(/SUMMARY:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
+    const rruleMatch = obj.data.match(/RRULE:(.+)/);
+    
+    if (!dtstartMatch) continue;
+    
+    const startTzInfo = dtstartMatch[1];
+    const startDateStr = dtstartMatch[2].trim();
+    const endTzInfo = dtendMatch ? dtendMatch[1] : startTzInfo;
+    const endDateStr = dtendMatch ? dtendMatch[2].trim() : null;
+    
+    // Parse dates
+    let startDate = parseICalDate(startDateStr);
+    let endDate = endDateStr ? parseICalDate(endDateStr) : new Date(startDate.getTime() + 30 * 60 * 1000);
+    
+    if (isNaN(startDate.getTime())) continue;
+    
+    const isRecurring = !!rruleMatch;
+    
+    // Debug specific events we're looking for
+    if (summary.includes('truck') || summary.includes('Stem')) {
+      console.log(`[parseICalEventsAll] Found target event: "${summary}"`, {
+        startDateStr,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        isRecurring,
+        uid
+      });
+    }
+    
+    if (isRecurring && rruleMatch) {
+      // For recurring events, return the base event with RRULE data for frontend expansion
+      const rruleStr = rruleMatch[1].trim();
+      events.push({
+        uid,
+        summary,
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        isRecurring: true,
+        rrule: rruleStr,
+        raw: obj.data
+      });
+    } else {
+      // Non-recurring event - include ALL non-recurring events regardless of date
+      events.push({
+        uid,
+        summary,
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        isRecurring: false,
+        raw: obj.data
+      });
+    }
+  }
+  
+  console.log(`[parseICalEventsAll] Parsed ${events.length} events total`);
   return events;
 }
 
@@ -356,18 +429,37 @@ async function fetchAndCacheEvents(from: Date, to: Date, cacheKey: string): Prom
         try {
           console.log(`[iCloud] Fetching events from calendar: ${calendar.displayName}`);
           
-          const calendarObjects = await client.fetchCalendarObjects({
-            calendar,
-            timeRange: {
-              start: from.toISOString(),
-              end: to.toISOString(),
-            },
-          });
+          // For /all endpoint (very wide date range), fetch without time restrictions
+          let calendarObjects;
+          if (from.getFullYear() === 1900 && to.getFullYear() === 2100) {
+            // This is the /all endpoint - fetch everything without time range
+            console.log(`[iCloud] Fetching ALL events from calendar: ${calendar.displayName}`);
+            calendarObjects = await client.fetchCalendarObjects({
+              calendar,
+              // No timeRange - fetch everything
+            });
+          } else {
+            // Regular endpoints - use time range filtering
+            calendarObjects = await client.fetchCalendarObjects({
+              calendar,
+              timeRange: {
+                start: from.toISOString(),
+                end: to.toISOString(),
+              },
+            });
+          }
           
           console.log(`[iCloud] Got ${calendarObjects.length} objects from ${calendar.displayName}`);
           
           // Parse the calendar objects
-          const parsedEvents = parseICalEvents(calendarObjects, from, to);
+          let parsedEvents;
+          if (from.getFullYear() <= 1900 && to.getFullYear() >= 2100) {
+            // For /all endpoint - don't filter by date, include everything
+            parsedEvents = parseICalEventsAll(calendarObjects);
+          } else {
+            // For regular endpoints - filter by date range
+            parsedEvents = parseICalEvents(calendarObjects, from, to);
+          }
           
           // Add calendar metadata to each event
           const eventsWithMeta = parsedEvents.map(event => {
@@ -774,6 +866,36 @@ router.post("/config", requireAdmin, async (req, res) => {
     config.updatedAt = new Date();
     await config.save();
     
+    console.log('[iCloud] POST /config: Configuration updated, invalidating caches...');
+    
+    // CACHE INVALIDATION: Clear all calendar caches since busy configuration changed
+    // Clear local iCloud eventCache (used by iCloud routes)
+    Object.keys(eventCache).forEach(key => delete eventCache[key]);
+    console.log(`[iCloud] POST /config: Cleared ${Object.keys(eventCache).length} iCloud cache entries`);
+    
+    // Clear centralized cache used by Google route - clear all Google-related cache keys
+    const cache = getCache();
+    if (cache.connected) {
+      // We need to clear all Google cache entries, but since we don't have pattern deletion,
+      // we'll clear the main ones that are likely to be cached
+      const userId = (req as any).user.id;
+      await cache.del(`google:all:${userId}`);
+      // Clear potential week cache entries (this is limited but better than nothing)
+      const today = new Date();
+      for (let i = -7; i <= 7; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() + i * 7); // Check weeks around current date
+        const startStr = date.toISOString().split('T')[0];
+        const endDate = new Date(date);
+        endDate.setDate(endDate.getDate() + 6);
+        const endStr = endDate.toISOString().split('T')[0];
+        await cache.del(`google:week:${startStr}:${endStr}:${userId}`);
+      }
+      console.log('[iCloud] POST /config: Invalidated Google calendar caches');
+    } else {
+      console.log('[iCloud] POST /config: Cache not connected, skipping Google cache invalidation');
+    }
+    
     console.log('[iCloud] POST /config: Configuration updated, fetching all calendars...');
     
     // After updating configuration, fetch all calendars (both iCloud and Google) 
@@ -1166,8 +1288,8 @@ router.get("/week", requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "start_and_end_required" });
   }
 
-  const from = new Date(start as string);
-  const to = new Date(end as string);
+  const from = new Date(start as string + "T00:00:00.000Z"); // Start of start day
+  const to = new Date(end as string + "T23:59:59.999Z");     // End of end day
   
   const events = await fetchAndCacheEvents(from, to, "no-cache");
   res.json({ events, cached: false });
@@ -1216,9 +1338,10 @@ router.get("/month", requireAdmin, async (req, res) => {
 });
 
 router.get("/all", requireAdmin, async (req, res) => {
-  const from = new Date();
-  const to = new Date(Date.now() + 90 * 86400000);
-  const cacheKey = createCacheKey("icloud", "all", from.toISOString(), to.toISOString());
+  // Fetch ALL events - use very wide date range to avoid filtering
+  const from = new Date('1900-01-01'); // Start from way in the past
+  const to = new Date('2100-12-31');   // Go way into the future
+  const cacheKey = createCacheKey("icloud", "all", "all-events");
   
   const cached = getCachedEvents(cacheKey);
   if (cached) {

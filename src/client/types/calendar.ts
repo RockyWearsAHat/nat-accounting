@@ -9,6 +9,17 @@ export interface CalendarEvent {
   color?: string;
   status?: string;
   responseStatus?: string;
+  // RRULE expansion data from backend
+  isRecurring?: boolean;
+  rrule?: string; // Raw RRULE string
+  recurrence?: any; // Google Calendar recurrence object
+  raw?: string; // Raw iCal/vEvent data for EXDATE parsing
+}
+
+export interface AvailabilitySlot {
+  start: string; // ISO
+  end: string; // ISO
+  available: boolean;
 }
 
 export interface CalendarInfo {

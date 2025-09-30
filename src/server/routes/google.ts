@@ -117,13 +117,41 @@ router.get("/calendars", requireAdmin, async (req, res) => {
 
 export async function getAuthorizedClient(userId?: string) {
   const user = await User.findById(userId);
-  if (!user?.googleTokens?.refreshToken) return null;
+  if (!user?.googleTokens?.refreshToken) {
+    console.log("[google] No refresh token found for user:", userId);
+    return null;
+  }
+  
   const client = buildClient();
   const creds: any = {
     refresh_token: user.googleTokens.refreshToken,
   };
   if (user.googleTokens.scope) creds.scope = user.googleTokens.scope;
+  
   client.setCredentials(creds);
+  
+  // Set up token refresh event handler
+  client.on('tokens', async (tokens) => {
+    console.log("[google] Tokens refreshed, updating user tokens");
+    if (tokens.access_token) {
+      // Update the client credentials with the new access token
+      client.setCredentials({
+        ...client.credentials,
+        access_token: tokens.access_token,
+      });
+    }
+    // Note: We don't persist access tokens, only refresh tokens
+  });
+  
+  try {
+    // Force a token refresh to ensure we have a valid access token
+    await client.getAccessToken();
+    console.log("[google] Successfully refreshed access token for user:", userId);
+  } catch (error) {
+    console.error("[google] Failed to refresh access token:", error);
+    return null;
+  }
+  
   return client;
 }
 
@@ -173,7 +201,9 @@ router.get("/week", requireAdmin, async (req, res) => {
     if (busyCalendars.length) {
       targetGoogleCals = targetGoogleCals.filter(u=> busyCalendars.includes(u));
     }
-    if (!targetGoogleCals.length) targetGoogleCals = allGoogleCals.map(id=> `google://${id}`);
+    // BUG FIX: Don't revert to all calendars if none are in busy list
+    // This was causing all Google calendars to be processed even when not configured as busy
+    // if (!targetGoogleCals.length) targetGoogleCals = allGoogleCals.map(id=> `google://${id}`);
 
     const events: any[] = [];
     for (const calUrl of targetGoogleCals) {
@@ -215,6 +245,103 @@ router.get("/week", requireAdmin, async (req, res) => {
   } catch (e: any) {
     console.error("[google] events fetch failed", e?.message || e);
     res.status(500).json({ error: "google_events_failed" });
+  }
+});
+
+router.get("/all", requireAdmin, async (req, res) => {
+  const cacheKey = createCacheKey("google", "all", (req as any).user!.id);
+  const cached = await getCachedEvents(cacheKey);
+  if (cached) {
+    res.json({ events: cached, cached: true });
+    return;
+  }
+
+  const client = await getAuthorizedClient((req as any).user!.id);
+  if (!client) {
+    console.warn("[google] all request without authorized client (no tokens)");
+    res.status(400).json({ error: "not_authenticated" });
+    return;
+  }
+  const calendar = google.calendar({ version: "v3", auth: client });
+  try {
+    // Determine which Google calendars are marked busy in unified config (CalendarConfigModel)
+    await connectMongo();
+    const configDoc: any = await CalendarConfigModel.findOne();
+    const busyCalendars: string[] = configDoc ? configDoc.busyCalendars || [] : [];
+    console.log(`[Google] /all DEBUG: busyCalendars.length = ${busyCalendars.length}, busyCalendars =`, busyCalendars);
+    
+    // If no config yet, we'll fallback later
+    const calListResp = await calendar.calendarList.list({ maxResults: 250 });
+    const allGoogleCals = (calListResp.data.items || []).map((c:any)=> c.id).filter(Boolean);
+    let targetGoogleCals = allGoogleCals.map(id=> `google://${id}`);
+    console.log(`[Google] /all DEBUG: Initial targetGoogleCals =`, targetGoogleCals);
+    
+    if (busyCalendars.length) {
+      targetGoogleCals = targetGoogleCals.filter(u=> busyCalendars.includes(u));
+      console.log(`[Google] /all DEBUG: After filtering, targetGoogleCals =`, targetGoogleCals);
+    }
+    
+    // BUG FIX: Don't revert to all calendars if none are in busy list
+    // This was causing all Google calendars to be processed even when not configured as busy
+    // if (!targetGoogleCals.length) targetGoogleCals = allGoogleCals.map(id=> `google://${id}`);
+
+    const events: any[] = [];
+    for (const calUrl of targetGoogleCals) {
+      const calId = calUrl.replace(/^google:\/\//, "");
+      try {
+        // For /all endpoint, fetch events from 1 year ago to 2 years from now
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const twoYearsFromNow = new Date();
+        twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);
+        
+        const resp = await calendar.events.list({
+          calendarId: calId,
+          timeMin: oneYearAgo.toISOString(),
+          timeMax: twoYearsFromNow.toISOString(),
+          singleEvents: false, // Keep recurring events as base events with recurrence rules
+          // Note: orderBy is not supported when singleEvents=false
+          maxResults: 2500, // Should be much fewer events now
+        });
+        for (const e of resp.data.items || []) {
+          const start = e.start?.dateTime || (e.start?.date ? e.start.date + "T00:00:00Z" : undefined);
+          const end = e.end?.dateTime || (e.end?.date ? e.end.date + "T23:59:00Z" : undefined);
+          if (!start) continue;
+          const calendarInfo = (calListResp.data.items || []).find(ci=> ci.id===calId);
+          
+          const eventData: any = {
+            summary: e.summary || "(No Title)",
+            start,
+            end,
+            uid: e.id,
+            calendar: calendarInfo?.summary || calId,
+            calendarUrl: `google://${calId}`,
+            calendarId: calId,
+            calendarSource: 'google',
+            sourceTimezone: calendarInfo?.timeZone || 'America/Denver', // Default to Mountain Time
+            blocking: busyCalendars.length ? busyCalendars.includes(`google://${calId}`) : true,
+            color: configDoc?.calendarColors?.[`google://${calId}`] || '#4285f4',
+            isRecurring: !!e.recurrence,
+          };
+          
+          // Include recurrence rules for recurring events
+          if (e.recurrence && e.recurrence.length > 0) {
+            eventData.recurrence = e.recurrence;
+          }
+          
+          events.push(eventData);
+        }
+      } catch (inner: any) {
+        console.warn("[google] calendar events fetch failed", calId, inner?.message || inner);
+      }
+    }
+    await setCachedEvents(cacheKey, events, 3600); // Cache for 1 hour for /all endpoint
+    res.json({ events, cached: false });
+    return;
+  } catch (e: any) {
+    console.error("[google] events fetch failed", e?.message || e);
+    res.status(500).json({ error: "google_events_failed" });
+    return;
   }
 });
 
