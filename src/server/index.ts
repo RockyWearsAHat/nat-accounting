@@ -88,7 +88,10 @@ const startServer = async () => {
   app.use("/api/merged", mergedRouter);
   app.use("/api/hours", hoursRouter);
   app.use("/api/settings", settingsRouter);
-  app.use("/api/debug", debugRouter);
+  // Debug routes only in development
+  if (process.env.NODE_ENV !== "production") {
+    app.use("/api/debug", debugRouter);
+  }
   app.use("/api/zoom", zoomRouter);
 
   // Initialize calendar cache immediately on startup

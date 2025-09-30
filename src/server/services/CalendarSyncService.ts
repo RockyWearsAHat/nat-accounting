@@ -229,6 +229,14 @@ export class CalendarSyncService {
 
     console.log(`iCloud sync found ${parsedEvents.length} events`);
 
+    // Get calendar configuration for proper color and blocking status
+    const config = await CalendarConfigModel.findOne();
+    const calendarUrl = syncToken.calendarUrl || '';
+    const isBlocking = config?.busyCalendars?.includes(calendarUrl) || false;
+    const calendarColor = (config?.calendarColors && calendarUrl) ? config.calendarColors[calendarUrl] : '#007AFF';
+    
+    console.log(`[sync] Calendar ${calendarUrl} - blocking: ${isBlocking}, color: ${calendarColor}`);
+
     // Update cached events
     for (const event of parsedEvents) {
       const existingEvent = await CachedEventModel.findOne({
@@ -261,6 +269,8 @@ export class CalendarSyncService {
             recurring: isRecurring,
             rrule: rruleString,
             raw: event.raw,
+            blocking: isBlocking,
+            color: calendarColor,
             lastModified: new Date(),
             syncedAt: new Date()
           }
@@ -280,9 +290,10 @@ export class CalendarSyncService {
           recurring: isRecurring,
           rrule: rruleString,
           raw: event.raw,
+          blocking: isBlocking,
+          color: calendarColor,
           lastModified: new Date(),
           syncedAt: new Date(),
-          blocking: true,
           deleted: false
         });
         eventsAdded++;
@@ -332,6 +343,14 @@ export class CalendarSyncService {
     try {
       const response = await calendar.events.list(params);
       
+      // Get calendar configuration for proper color and blocking status
+      const config = await CalendarConfigModel.findOne();
+      const googleCalendarUrl = `google://${syncToken.calendarId}`;
+      const isBlocking = config?.busyCalendars?.includes(googleCalendarUrl) || false;
+      const calendarColor = (config?.calendarColors && googleCalendarUrl) ? config.calendarColors[googleCalendarUrl] : '#4285f4';
+      
+      console.log(`[sync] Google calendar ${syncToken.calendarId} - blocking: ${isBlocking}, color: ${calendarColor}`);
+      
       let eventsAdded = 0;
       let eventsUpdated = 0;
       let eventsDeleted = 0;
@@ -372,7 +391,8 @@ export class CalendarSyncService {
             lastModified: new Date(event.updated!),
             syncedAt: new Date(),
             etag: event.etag ?? undefined,
-            blocking: true,
+            blocking: isBlocking,
+            color: calendarColor,
             deleted: false
           };
 
