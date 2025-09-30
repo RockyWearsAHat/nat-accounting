@@ -2,3 +2,6 @@ node_modules/
 .env
 **/node_modules/
 dist/
+server.log
+*.log
+debug-timezone.js
