@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { http } from '../lib/http';
 import styles from '../components/calendar.module.css';
+import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
+
 
 interface ScheduledMeeting {
   id: string;
@@ -34,19 +36,46 @@ interface MeetingsSectionProps {
 }
 
 export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdate }) => {
-  const [activeTab, setActiveTab] = useState<'scheduled' | 'requested'>('scheduled');
+  const [activeTab, setActiveTab] = useState<'scheduled' | 'past' | 'requested'>('scheduled');
   const [scheduledMeetings, setScheduledMeetings] = useState<ScheduledMeeting[]>([]);
+  const [pastMeetings, setPastMeetings] = useState<ScheduledMeeting[]>([]);
   const [requestedMeetings, setRequestedMeetings] = useState<RequestedMeeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [meetingToReschedule, setMeetingToReschedule] = useState<ScheduledMeeting | null>(null);
+
+  // Get events from shared context
+
 
   const loadScheduledMeetings = async () => {
     try {
-      const data = await http.get<{ meetings: ScheduledMeeting[] }>('/api/meetings/scheduled');
-      setScheduledMeetings(data.meetings || []);
+      setLoading(true);
+      
+      // Use meetings API for better filtering
+      const response = await http.get('/api/meetings/scheduled') as { meetings: ScheduledMeeting[] };
+      const allMeetings: ScheduledMeeting[] = response.meetings || [];
+      
+      const now = new Date();
+      
+      // Split into future/ongoing and past meetings
+      const upcoming = allMeetings.filter(meeting => {
+        const meetingEnd = new Date(meeting.end);
+        return meetingEnd >= now; // Include ongoing and future meetings
+      });
+      
+      const past = allMeetings.filter(meeting => {
+        const meetingEnd = new Date(meeting.end);
+        return meetingEnd < now; // Only truly completed meetings
+      });
+      
+      setScheduledMeetings(upcoming);
+      setPastMeetings(past.sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime())); // Most recent first
     } catch (err: any) {
       console.error('Failed to load scheduled meetings:', err);
       setError('Failed to load scheduled meetings');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -60,11 +89,16 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
     }
   };
 
+  // Load meetings on mount
+  useEffect(() => {
+    loadScheduledMeetings();
+  }, []);
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       setError(null);
-      await Promise.all([loadScheduledMeetings(), loadRequestedMeetings()]);
+      await loadRequestedMeetings(); // Only load requested meetings from API
       setLoading(false);
     };
     loadData();
@@ -87,15 +121,22 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
     };
   };
 
-  const isUpcoming = (dateString: string) => {
-    return new Date(dateString) > new Date();
+  const isUpcoming = (startDateString: string, endDateString?: string) => {
+    const now = new Date();
+    const endDate = endDateString ? new Date(endDateString) : new Date(startDateString);
+    return endDate >= now; // Meeting is upcoming if it hasn't ended yet
   };
 
   const handleJoinMeeting = (meeting: ScheduledMeeting) => {
-    if (meeting.videoUrl) {
+    if (meeting.videoUrl && meeting.videoUrl.trim()) {
+      console.log(meeting.videoUrl);
       window.open(meeting.videoUrl, '_blank');
+    } else if (meeting.zoomMeetingId && meeting.zoomMeetingId.trim()) {
+      // If we have a Zoom meeting ID but no direct URL, construct the join URL
+      const zoomUrl = `https://zoom.us/j/${meeting.zoomMeetingId}`;
+      window.open(zoomUrl, '_blank');
     } else {
-      alert('No meeting link available');
+      alert('No meeting link available for this appointment. You can add a video conference link by rescheduling the meeting.');
     }
   };
 
@@ -105,19 +146,27 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
     }
 
     try {
+      // Optimistically remove meeting from UI immediately
+      setScheduledMeetings(prev => prev.filter(m => m.id !== meetingId));
+      setPastMeetings(prev => prev.filter(m => m.id !== meetingId));
+      
       await http.del(`/api/meetings/${meetingId}`);
-      await loadScheduledMeetings(); // Refresh the list
-      if (onMeetingUpdate) onMeetingUpdate();
+      
+      alert('Meeting canceled successfully.');
     } catch (err: any) {
       console.error('Failed to cancel meeting:', err);
-      alert('Failed to cancel meeting. Please try again.');
+      
+      // Revert optimistic update on error
+      loadScheduledMeetings();
+      
+      const errorMessage = err.response?.data?.error || err.message || 'Unknown error';
+      alert(`Failed to cancel meeting: ${errorMessage}. Please contact support if this persists.`);
     }
   };
 
   const handleReschedule = (meeting: ScheduledMeeting) => {
-    // TODO: Implement reschedule functionality
-    // This would open a modal similar to ScheduleAppointmentModal
-    alert('Reschedule functionality coming soon. For now, please cancel and create a new appointment.');
+    setMeetingToReschedule(meeting);
+    setShowRescheduleModal(true);
   };
 
   if (loading) {
@@ -139,6 +188,12 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
             onClick={() => setActiveTab('scheduled')}
           >
             Scheduled ({scheduledMeetings.length})
+          </button>
+          <button
+            className={`${styles.tabButton} ${activeTab === 'past' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('past')}
+          >
+            Past ({pastMeetings.length})
           </button>
           <button
             className={`${styles.tabButton} ${activeTab === 'requested' ? styles.tabActive : ''}`}
@@ -164,23 +219,30 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
               <div className={styles.meetingsList}>
                 {scheduledMeetings.map(meeting => {
                   const { date, time } = formatDateTime(meeting.start);
-                  const upcoming = isUpcoming(meeting.start);
+                  const upcoming = isUpcoming(meeting.start, meeting.end);
+                  const now = new Date();
+                  const isOngoing = new Date(meeting.start) <= now && new Date(meeting.end) >= now;
                   
                   return (
                     <div key={meeting.id} className={`${styles.meetingCard} ${!upcoming ? styles.pastMeeting : ''}`}>
                       <div className={styles.meetingInfo}>
                         <div className={styles.meetingTitle}>
                           <h5>{meeting.summary}</h5>
+                          {meeting.clientName && meeting.clientName !== meeting.summary && (
+                            <div className={styles.clientSubtitle}>
+                              Client: {meeting.clientName}
+                            </div>
+                          )}
+                          {isOngoing && <span className={styles.ongoingLabel}>Ongoing</span>}
                           {!upcoming && <span className={styles.pastLabel}>Past</span>}
                         </div>
                         <div className={styles.meetingDetails}>
                           <div className={styles.meetingTime}>
                             <strong>{date}</strong> at {time}
                           </div>
-                          {meeting.clientName && (
+                          {meeting.clientEmail && (
                             <div className={styles.clientInfo}>
-                              Client: {meeting.clientName}
-                              {meeting.clientEmail && ` (${meeting.clientEmail})`}
+                              Email: {meeting.clientEmail}
                             </div>
                           )}
                           {meeting.location && (
@@ -197,7 +259,7 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
                       </div>
                       
                       <div className={styles.meetingActions}>
-                        {upcoming && meeting.videoUrl && (
+                        {upcoming && (meeting.videoUrl || meeting.zoomMeetingId) && (
                           <button
                             className={styles.joinButton}
                             onClick={() => handleJoinMeeting(meeting)}
@@ -227,6 +289,76 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
                         {meeting.zoomMeetingId && (
                           <div className={styles.zoomInfo}>
                             Zoom ID: {meeting.zoomMeetingId}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'past' && (
+          <div className={styles.pastMeetings}>
+            {pastMeetings.length === 0 ? (
+              <p className={styles.emptyState}>No past meetings</p>
+            ) : (
+              <div className={styles.meetingsList}>
+                {pastMeetings.map(meeting => {
+                  const { date, time } = formatDateTime(meeting.start);
+                  
+                  return (
+                    <div key={meeting.id} className={`${styles.meetingCard} ${styles.pastMeeting}`}>
+                      <div className={styles.meetingInfo}>
+                        <div className={styles.meetingTitle}>
+                          <h5>{meeting.summary}</h5>
+                          {meeting.clientName && meeting.clientName !== meeting.summary && (
+                            <div className={styles.clientSubtitle}>
+                              Client: {meeting.clientName}
+                            </div>
+                          )}
+                          <span className={styles.pastLabel}>Completed</span>
+                        </div>
+                        <div className={styles.meetingDetails}>
+                          <div className={styles.meetingTime}>
+                            <strong>{date}</strong> at {time}
+                          </div>
+                          {meeting.clientEmail && (
+                            <div className={styles.clientInfo}>
+                              Email: {meeting.clientEmail}
+                            </div>
+                          )}
+                          {meeting.location && (
+                            <div className={styles.meetingLocation}>
+                              📍 {meeting.location}
+                            </div>
+                          )}
+                          {meeting.description && (
+                            <div className={styles.meetingDescription}>
+                              {meeting.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className={styles.meetingActions}>
+                        <button
+                          className={styles.deleteButton}
+                          onClick={() => handleDeleteMeeting(meeting.id)}
+                          title="Delete meeting record"
+                        >
+                          🗑️ Delete
+                        </button>
+                        {meeting.zoomMeetingId && (
+                          <div className={styles.zoomInfo}>
+                            Zoom ID: {meeting.zoomMeetingId}
+                          </div>
+                        )}
+                        {meeting.videoUrl && (
+                          <div className={styles.meetingLink}>
+                            Meeting URL: {meeting.videoUrl}
                           </div>
                         )}
                       </div>
@@ -295,6 +427,44 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
           </div>
         )}
       </div>
+      
+      {/* Reschedule Modal */}
+      {showRescheduleModal && meetingToReschedule && (
+        <ScheduleAppointmentModal
+          open={showRescheduleModal}
+          onClose={() => {
+            setShowRescheduleModal(false);
+            setMeetingToReschedule(null);
+          }}
+          onScheduled={async (newEvent) => {
+            // For reschedule, we need to delete the old meeting and create new one
+            try {
+              // Delete the old meeting first
+              await http.del(`/api/meetings/${meetingToReschedule.id}`);
+            } catch (error) {
+              console.warn('Failed to delete original meeting during reschedule:', error);
+            }
+            
+            // No need to manually refresh - context will auto-update
+            setShowRescheduleModal(false);
+            setMeetingToReschedule(null);
+            if (onMeetingUpdate) onMeetingUpdate();
+          }}
+          defaultDate={new Date(meetingToReschedule.start).toISOString().split('T')[0]}
+          defaultTitle={meetingToReschedule.summary}
+          defaultClientName={meetingToReschedule.clientName || ''}
+          defaultDescription={meetingToReschedule.description || ''}
+          defaultLocation={meetingToReschedule.location || ''}
+          defaultVideoUrl={meetingToReschedule.videoUrl || ''}
+          defaultTime={new Date(meetingToReschedule.start).toLocaleTimeString('en-US', { 
+            hour12: false, 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })}
+          defaultLength={Math.round((new Date(meetingToReschedule.end).getTime() - new Date(meetingToReschedule.start).getTime()) / (1000 * 60))}
+          excludeEventId={meetingToReschedule.id}
+        />
+      )}
     </div>
   );
 };

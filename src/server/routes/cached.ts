@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { CachedEventModel } from "../models/CachedEvent";
-import { SyncTokenModel } from "../models/SyncToken";
+import { SyncTokenModel, ISyncToken } from "../models/SyncToken";
 import { syncService } from "../services/CalendarSyncService";
 import { requireAuth } from "../middleware/auth";
 import dayjs from "dayjs";
@@ -23,16 +23,17 @@ router.get("/all", async (req, res) => {
   try {
     const { refresh } = req.query;
     
-    // Get events from cache (instant response)
+    // Use smaller date range like merged endpoint - only 3 months
+    const now = dayjs();
     const events = await CachedEventModel.find({ 
       deleted: false,
       start: { 
-        $gte: dayjs().subtract(6, 'months').toDate(),
-        $lte: dayjs().add(12, 'months').toDate()
+        $gte: now.subtract(1, 'month').toDate(),
+        $lte: now.add(3, 'months').toDate()
       }
     }).sort({ start: 1 }).lean();
 
-    // Transform to frontend format
+    // Transform to frontend format with minimal processing
     const transformedEvents = events.map(event => ({
       id: event.eventId,
       title: event.title,
@@ -41,14 +42,21 @@ router.get("/all", async (req, res) => {
       allDay: event.allDay,
       description: event.description,
       location: event.location,
+      url: event.url,
       color: event.color,
       provider: event.provider,
       calendarId: event.calendarId,
-      blocking: event.blocking,
-      lastModified: event.lastModified.toISOString()
+      blocking: event.blocking
     }));
 
-    // Check if we need background sync
+    // Send response immediately, then trigger background sync
+    res.json({
+      events: transformedEvents,
+      cached: true,
+      timestamp: new Date().toISOString()
+    });
+
+    // Check if we need background sync (after response sent)
     const shouldSync = refresh === 'true' || await shouldTriggerBackgroundSync();
     
     if (shouldSync) {
@@ -57,13 +65,6 @@ router.get("/all", async (req, res) => {
         console.error("Background sync failed:", error);
       });
     }
-
-    res.json({
-      events: transformedEvents,
-      cached: true,
-      syncTriggered: shouldSync,
-      timestamp: new Date().toISOString()
-    });
 
   } catch (error) {
     console.error("Cache-first events fetch failed:", error);
@@ -106,6 +107,7 @@ router.get("/range", async (req, res) => {
       allDay: event.allDay,
       description: event.description,
       location: event.location,
+      url: event.url,
       color: event.color,
       provider: event.provider,
       calendarId: event.calendarId,
@@ -192,6 +194,7 @@ router.get("/day", async (req, res) => {
               allDay: cachedEvent.allDay,
               description: cachedEvent.description,
               location: cachedEvent.location,
+              url: cachedEvent.url,
               color: cachedEvent.color,
               provider: cachedEvent.provider,
               calendarId: cachedEvent.calendarId,
@@ -215,6 +218,7 @@ router.get("/day", async (req, res) => {
               allDay: cachedEvent.allDay,
               description: cachedEvent.description,
               location: cachedEvent.location,
+              url: cachedEvent.url,
               color: cachedEvent.color,
               provider: cachedEvent.provider,
               calendarId: cachedEvent.calendarId,
@@ -237,6 +241,7 @@ router.get("/day", async (req, res) => {
             allDay: cachedEvent.allDay,
             description: cachedEvent.description,
             location: cachedEvent.location,
+            url: cachedEvent.url,
             color: cachedEvent.color,
             provider: cachedEvent.provider,
             calendarId: cachedEvent.calendarId,
@@ -269,9 +274,12 @@ router.get("/day", async (req, res) => {
  */
 router.get("/sync/status", async (req, res) => {
   try {
-    const syncTokens = await SyncTokenModel.find({}).lean();
+    const syncTokens = await SyncTokenModel.find({}).lean<ISyncToken[]>();
     const totalEvents = await CachedEventModel.countDocuments({ deleted: false });
-    const lastSync = await SyncTokenModel.findOne({}).sort({ lastSyncAt: -1 }).lean();
+    const lastSync = await SyncTokenModel
+      .findOne({})
+      .sort({ lastSyncAt: -1 })
+      .lean<ISyncToken | null>();
 
     const status = {
       totalCalendars: syncTokens.length,
@@ -390,6 +398,7 @@ router.post("/events", async (req, res) => {
       allDay: cachedEvent.allDay,
       description: cachedEvent.description,
       location: cachedEvent.location,
+      url: cachedEvent.url,
       provider: 'local',
       calendarId: 'local',
       blocking: true
@@ -411,7 +420,10 @@ router.post("/events", async (req, res) => {
  */
 async function shouldTriggerBackgroundSync(): Promise<boolean> {
   try {
-    const lastSync = await SyncTokenModel.findOne({}).sort({ lastSyncAt: -1 }).lean();
+    const lastSync = await SyncTokenModel
+      .findOne({})
+      .sort({ lastSyncAt: -1 })
+      .lean<ISyncToken | null>();
     
     if (!lastSync) {
       return true; // No sync tokens yet, trigger sync
@@ -419,7 +431,7 @@ async function shouldTriggerBackgroundSync(): Promise<boolean> {
     
     // Trigger sync if last sync was more than 5 minutes ago
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    return lastSync.lastSyncAt < fiveMinutesAgo;
+  return lastSync.lastSyncAt < fiveMinutesAgo;
     
   } catch (error) {
     console.error("Error checking sync status:", error);

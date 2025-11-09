@@ -8,14 +8,17 @@
 - **CalendarCache React Context** (`src/client/lib/CalendarCache.tsx`) - React context for instant calendar access
 
 **Performance Characteristics:**
-- Initial load: ~10ms (MongoDB cached data)
-- Background sync: 5-minute intervals with sync tokens
-- Instant UI updates with optimistic updates
+- Initial load: ~10ms (MongoDB cached data served immediately)
+- Background sync: Triggered after each response to keep cache fresh
+- No frontend caching: Always fetch fresh from MongoDB cache
+- Progressive loading: Business hours immediate, events load after
+- Cache-first pattern: Serve → trigger background sync → update context
 - Automatic calendar configuration application
 
 ### WeeklyCalendar Component (`src/client/components/WeeklyCalendar.tsx`)
 - Professional calendar view with iCloud-style design
-- **Current Implementation**: Uses `/api/merged/all` for unified iCloud+Google calendar data
+- **Current Implementation**: Uses `/api/cached/all` directly for fastest loading, falls back to `/api/merged/all`
+- **Loading UX**: Business hours display immediately, minimal loading overlay, no frontend caching
 - **Features**: Event hover states, overlapping event handling, business hours integration
 - **Modals**: Integrates with DayEventsModal, ScheduleAppointmentModal, EventModal
 - **Styling**: Professional black/white theme with proper contrast and typography
@@ -36,6 +39,27 @@
 - `GET /api/cached/all` - Get all cached events (instant response with background sync)
 - `POST /api/cached/sync/trigger` - Manual sync trigger (admin only)
 - `POST /api/cached/sync/reset` - Force full calendar resync (admin only)
+
+### Cache-First Architecture (Dec 2024)
+
+**Implementation Pattern:**
+All calendar endpoints now follow cache-first pattern for optimal UX:
+1. **Serve from cache immediately** - MongoDB cached data returned instantly  
+2. **Trigger background sync** - Fresh data fetched after response sent
+3. **Update context** - CalendarEventsContext updated when cache changes
+4. **No blocking waits** - Users never wait for sync operations
+
+**Key Endpoints Using Pattern:**
+- `/api/availability` - Instant slot calculation from cache + background sync
+- `/api/merged/*` - Fast unified calendar data + background refresh  
+- `/api/cached/*` - Direct cache access with sync triggers
+- All endpoints serve immediately, sync in background
+
+**Frontend Optimizations:**
+- **No frontend caching** - Always fetch fresh from MongoDB (fast enough)
+- **Progressive loading** - Business hours immediate, skeleton events during load
+- **Context updates** - CalendarEventsContext automatically updates on changes
+- **Optimistic UI** - Immediate updates for user actions, background confirmation
 
 ### Calendar Configuration System
 
@@ -136,6 +160,8 @@ Professionalize this site, make it clean, interesting, and very helpful to the e
 Make sure to keep this copilot-instructions.md file updated with any new reusable components, functions, or utilities you create. This will help maintain a comprehensive reference for future development and ensure consistency across the codebase. Always document the purpose, props, and usage of new components or functions clearly in this file. Continue to refine, consolidate and expand this document as is necessary as the project evolves, ensuring it remains a valuable resource for anyone working on the codebase.
 
 When making edits or additions, consider how they fit into the overall architecture and design principles outlined in this document. Ensure that new code adheres to the established guidelines for maintainability, scalability, and user experience.
+
+When testing ensure that the dev server is run with isBackground: true, `npm run dev` will always kill any existing processes and start a new one, it will write to the server.log file, be careful when restarting the server as the server.log is recreated each time. Always use isBackground: true for curls and other testing commands to ensure that terminals don't overlap and interfere with each other. When testing ensure efficient console management, I am currently running into consistent "The terminal process failed to launch: A native exception occurred during launch (posix_spawnp failed.)." errors during testing and iteration, ensure proper management to avoid this.
 
 ## Publishing Environment
 This site will be deployed on netlify, this means 4096 characters of build environment variables, and a serverless environment, no shared values between requests, and no persistent storage except externally (in databases or locally or whatever). Ensure that the build is optimized and efficient to meet these constraints. Which leads me to the...
@@ -256,6 +282,7 @@ Automatically create Zoom meetings when scheduling appointments, with proper cle
 - ✅ **Smart UI**: "Create Zoom" button only enabled when date and time are selected
 - ✅ **Better Feedback**: Shows scheduled time and meeting ID in success message
 - ✅ **Validation**: Prevents creating meetings without proper appointment time selected
+- ✅ **Full Deletion**: Meeting deletion now completely removes events from source calendars (iCloud/Google) and cache, not soft delete
 
 ### Meetings Management System (Dec 2024)
 
@@ -286,6 +313,7 @@ Comprehensive meeting management interface for admins to view, manage, and contr
 
 **Key Features:**
 - **Join Meeting Button**: Direct links to Zoom meetings for active appointments
+- **Full Event Deletion**: Completely removes meetings from source calendars (iCloud/Google) and cache
 - **Automatic Zoom Cleanup**: Deleting meetings also removes associated Zoom meetings
 - **Past/Future Distinction**: Visual indicators for meeting status
 - **Client Information**: Extracted from meeting summaries and descriptions
@@ -887,4 +915,92 @@ const events = await CachedEventModel.find({
 - CalendarSyncService (properly applies calendar configuration)
 - Cached router (/api/cached/day) for event retrieval
 
+---
+
+### Smart Pricing Calculator (Nov 2025)
+
+**Architecture Overview:**
+Spreadsheet-driven pricing engine backed by the `Pricing_Calculator_and_Quote.xlsx` workbook. Metadata and calculations are parsed server-side, persisted defaults live in MongoDB, and the admin UI provides live recalculations, exports, and email delivery.
+
+**Core Server Modules:**
+
+1. `src/server/pricing/parser.ts`
+  - `getPricingMetadata()` (async) caches workbook structure (line items, tiers, totals) after hydrating from Mongo-backed workbook storage.
+  - `calculatePricing(input)` (async) applies client size, price point, line selections, optional overrides, and quote header details. Recomputes via `xlsx-calc` and returns line results + totals + modified workbook instance ready for export.
+  - `workbookToBuffer()` / `workbookToCsv()` helpers emit XLSX/CSV outputs.
+
+2. `src/server/models/PricingWorkbook.ts`
+  - Single-document collection that stores the latest pricing workbook (`data` Buffer + metadata) for Netlify friendliness.
+  - Updated whenever admins finish the mapping wizard so subsequent requests never depend on local disk.
+
+3. `src/server/models/PricingSettings.ts`
+  - Stores single-document defaults (client size, price point) and per-line overrides (selected, quantity, maintenance, custom rates) with update timestamps and optional export recipients.
+
+4. `src/server/routes/pricing.ts`
+  - `GET /api/pricing` → bootstrap metadata, saved settings, and resolved defaults.
+  - `POST /api/pricing/calculate` → recalculates totals for the provided selections.
+  - `PUT /api/pricing/settings` → persists admin defaults and overrides.
+  - `POST /api/pricing/export` → returns XLSX/CSV (base64) and optionally emails the quote using `MailService`.
+  - `PUT /api/pricing/workbook` → accepts the sanitized mapping plus optional base64 workbook payload, persists to Mongo, invalidates caches, and refreshes metadata so the UI sees new line items immediately.
+  - All endpoints require `requireAuth` + `requireAdmin`.
+
+5. `src/server/services/MailService.ts`
+  - Thin SMTP wrapper (env: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `EMAIL_FROM`).
+  - `sendPricingQuoteEmail` emails attached quotes with totals summary; throws when SMTP is not configured to surface actionable errors to the UI.
+
+**Frontend Components & Types:**
+
+- `src/client/components/PricingCalculatorAdmin.tsx`
+  - Calls `/api/pricing` on mount, rendering either the calculator or a setup CTA when workbook metadata is missing; the CTA launches the workbook wizard directly.
+  - Maintains local form state (client size, price point, quote meta, per-line overrides), triggers recalculations via `/api/pricing/calculate`, and surfaces mapping summaries plus totals.
+  - Supports saving defaults, exporting XLSX/CSV, emailing quotes, and uses `PricingCalculatorAdmin.module.css` for the minimal black/white luxe styling.
+
+- `src/client/components/WorkbookMappingWizard.tsx`
+  - Full-screen modal wizard with four steps (workbook upload, calculator mapping, quote mapping, review).
+  - Supports Excel upload via `xlsx` reader, interactive cell/column/row selection, datalist suggestions for detected column letters, and automatic normalization of mapping values before persisting.
+  - Emits sanitized `PricingWorkbookMapping` payload plus optional base64 workbook; submit is async-aware with inline error messaging.
+  - Successful submissions call `PUT /api/pricing/workbook`, persisting the workbook binary + mapping to Mongo and automatically reloading metadata.
+
+- `src/client/components/SpreadsheetPreview.tsx`
+  - Reusable virtualized sheet preview with sticky headers and highlight states for columns/rows/cells.
+  - Provides click callbacks that the wizard consumes to assign mapping fields, grows to fill the column, and keeps the grid scrollable inside the modal.
+  - Styles live in `SpreadsheetPreview.module.css` with luxe black/white grid aesthetics.
+
+- `src/client/types/pricing.ts`
+  - Shared client-side types matching API payloads/responses (client sizes, line metadata, totals, settings, form payloads).
+
+**Workbook Mapping Notes:**
+- Calculator sheet columns map to selection (`A`), quantity (`B`), maintenance toggle (`C`), tier (`D`), service (`E`), billing (`F`), rate tables (`G`–`O`), computed unit price (`R`), line total (`S`), maintenance total (`U`), and type (`T`).
+- Totals cells: `B32` monthly, `B33` one-time, `B34` maintenance, `B35` month-one grand total, `B36` ongoing monthly.
+- Quote Builder sheet cells updated with `quoteDetails` (`B5` client name, `B6` company, `B7` prepared by, `E5` size, `E6` price point, `E7` optional email).
+
+**Excel Function Shims:**
+- `ensureCalcFunctionsRegistered()` registers shims for `_xlfn.ANCHORARRAY`, `_xlfn.FILTER`, `_xlws.FILTER`, and `FILTER` to keep `xlsx-calc` aligned with Excel 365 formulas.
+- The FILTER shim performs a best-effort row filtering (supports 1D/2D arrays) and falls back to `ifEmpty` or `[]` when no rows survive.
+
+**Workbook Mapping Wizard (Jan 2025):**
+- Launches from the Pricing admin card and opens `WorkbookMappingWizard` (modal rendered via portal).
+- Step 1 allows optional Excel upload (`.xlsx`); detected sheets are cached (`<=120` rows × `50` columns) for snappy previews.
+- Step 2 maps calculator sheet cells, totals, line ranges, and columns using live SpreadsheetPreview interaction (column/row/cell pickers + manual inputs).
+- Step 3 optionally maps quote builder cells with the same preview tooling; administrators can skip the quote sheet entirely.
+- Step 4 introduces the Service Rules editor, surfacing the analyzed blueprint so admins can tweak service names, tiers, billing cadence, default selections, quantities, maintenance toggles, and rate bands before submission. Saving writes overrides through `PUT /api/pricing/blueprint`, while the wizard (and dashboard) can regenerate AI output via `POST /api/pricing/blueprint/reanalyze` and bootstrap the latest base/override/merged payloads with `GET /api/pricing/blueprint`.
+
+**Usage Flow:**
+1. Admin loads `/admin` → `PricingCalculatorAdmin` hits `/api/pricing`; when metadata is missing it shows a “Launch Setup Wizard” CTA instead of rendering the calculator, honouring the no-default-workbook rule.
+2. If the CTA is used, the workbook wizard accepts an upload/mapping and persists it via `PUT /api/pricing/workbook`; on success the bootstrap refreshes automatically so the calculator unlocks immediately.
+3. Once metadata is available, changes to toggles/quantities/overrides trigger recalculations via `/api/pricing/calculate` and totals update live.
+4. `Save Defaults` writes to `PricingSettingsModel` ensuring future sessions preload custom options.
+5. `Export` downloads XLSX/CSV and, when configured, emails attachment via `MailService` in one action.
+6. Workbook uploads go straight into Mongo via `PUT /api/pricing/workbook`, keeping Netlify deployments stateless while ensuring metadata refreshes instantly for admins.
+
+**Environment Requirements:**
+- Ensure new dependencies (`xlsx`, `xlsx-calc`, `nodemailer`) are available in Netlify build.
+- Configure SMTP env vars for email features; API gracefully errors when unset so UI can notify admins.
+
+- **Pricing Blueprint Initiative (Nov 2025)**:
+  - `src/server/pricing/blueprint.ts` defines portable blueprint types (`PricingBlueprint`, `PricingServiceBlueprint`, `PricingWorkbookSnapshot`, etc.) used to describe services, rate bands, modifiers, and flattened workbook data.
+  - `src/server/pricing/workbookAnalyzer.ts` exposes `extractWorkbookSnapshot` / `extractWorkbookSnapshotFromBuffer` utilities to flatten Excel worksheets into typed snapshots (headers, data, validations) for downstream AI-assisted analysis.
+  - `src/server/pricing/aiBlueprintGenerator.ts` provides `generatePricingBlueprintWithAI()` which accepts a workbook snapshot and an OpenAI-compatible client to request a structured pricing blueprint using JSON schema enforcement. The module intentionally uses a lightweight `OpenAIClientLike` interface so we can plug in the official SDK or mocks in tests.
+  - Future work: wire these utilities into the admin pricing flow to auto-generate service catalogs when the workbook structure changes, then layer manual overrides on top of the generated blueprint.
+  - `src/server/pricing/deterministicBlueprint.ts` adds `generateDeterministicPricingBlueprint()` which builds a read-only blueprint directly from the workbook snapshot and current mapping. `runWorkbookAnalysis()` now calls this automatically whenever OpenAI is unavailable or fails, so admins always see an immediate summary after uploading a workbook.
 ---

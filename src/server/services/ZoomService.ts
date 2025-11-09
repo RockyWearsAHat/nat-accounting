@@ -13,11 +13,40 @@ dayjs.extend(timezone);
 
 interface ZoomMeetingRequest {
   topic: string;
+  type?: number; // Meeting type (1=instant, 2=scheduled, 3=recurring, 8=recurring with fixed time)
   start_time: string; // ISO string in UTC
   duration: number; // minutes
   timezone?: string;
   agenda?: string;
   password?: string;
+  settings?: {
+    host_video?: boolean;
+    participant_video?: boolean;
+    cn_meeting?: boolean;
+    in_meeting?: boolean;
+    join_before_host?: boolean;
+    mute_upon_entry?: boolean;
+    watermark?: boolean;
+    use_pmi?: boolean;
+    approval_type?: number;
+    audio?: string;
+    auto_recording?: 'local' | 'cloud' | 'none';
+    enforce_login?: boolean;
+    enforce_login_domains?: string;
+    alternative_hosts?: string;
+    close_registration?: boolean;
+    show_share_button?: boolean;
+    allow_multiple_devices?: boolean;
+    registrants_confirmation_email?: boolean;
+    waiting_room?: boolean;
+    request_permission_to_unmute_participants?: boolean;
+    global_dial_in_countries?: string[];
+    registrants_email_notification?: boolean;
+    meeting_authentication?: boolean;
+    require_password_for_scheduling?: boolean;
+    require_password_for_joining_by_phone?: boolean;
+    require_password_for_instant_meetings?: boolean;
+  };
 }
 
 interface ZoomMeetingResponse {
@@ -145,7 +174,19 @@ export class ZoomService {
         duration: params.duration,
         timezone: params.timezone || 'America/Denver',
         agenda: params.agenda || `Consultation meeting: ${params.topic}`,
-        password: this.generateMeetingPassword()
+        // Configure meeting for easy joining without passcode
+        type: 2, // Scheduled meeting
+        settings: {
+          join_before_host: true,
+          waiting_room: false,
+          meeting_authentication: false,
+          // Explicitly disable password requirements
+          require_password_for_scheduling: false,
+          require_password_for_joining_by_phone: false,
+          require_password_for_instant_meetings: false,
+          // Try to disable password entirely
+          use_pmi: false
+        }
       };
 
       console.log('[Zoom] Creating meeting:', {

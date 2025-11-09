@@ -32,7 +32,7 @@ function requireAdmin(req: any, res: any, next: any) {
 router.get("/", async (req, res) => {
   console.log("=== AVAILABILITY REQUEST HIT ===");
   try {
-    const { date, duration = "30", buffer = "0" } = req.query;
+    const { date, duration = "30", buffer = "0", excludeEventId } = req.query;
     
     if (!date || typeof date !== "string") {
       return res.status(400).json({ error: "Date parameter required (YYYY-MM-DD)" });
@@ -210,6 +210,12 @@ router.get("/", async (req, res) => {
 
       // Check if this slot conflicts with any blocking events
       const hasConflict = cachedEvents.some((event: any) => {
+        // Skip the event we're rescheduling
+        if (excludeEventId && event.eventId === excludeEventId) {
+          console.log(`[availability] Excluding event "${event.title}" (${event.eventId}) from conflict check`);
+          return false;
+        }
+        
         // Handle different event formats (cached vs expanded)
         const eventTitle = event.title || 'Untitled Event';
         
@@ -247,7 +253,7 @@ router.get("/", async (req, res) => {
     console.log(`[availability-simple] Close: ${closeMinutes}min (${Math.floor(closeMinutes/60)}:${(closeMinutes%60).toString().padStart(2,'0')})`);
     console.log(`[availability-simple] Slot duration: ${slotDuration}min, Buffer: ${bufferMinutes}min, Total: ${totalSlotTime}min`);
 
-    return res.json({
+    const response = {
       available: slots.length > 0,
       slots,
       businessHours: {
@@ -262,7 +268,22 @@ router.get("/", async (req, res) => {
         bufferMinutes,
         totalSlotTime
       }
-    });
+    };
+
+    // Send response immediately 
+    res.json(response);
+
+    // Trigger background sync to keep cache fresh (don't wait for it)
+    try {
+      const { syncService } = await import("../services/CalendarSyncService");
+      syncService.syncAllCalendars().catch(error => {
+        console.error("[availability] Background sync failed:", error);
+      });
+    } catch (syncError) {
+      console.error("[availability] Failed to trigger background sync:", syncError);
+    }
+
+    return;
 
   } catch (error) {
     console.error("[availability-simple] Error:", error);

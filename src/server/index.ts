@@ -76,6 +76,7 @@ const startServer = async () => {
   const { router: debugRouter } = await import("./routes/debug");
   const { default: zoomRouter } = await import("./routes/zoom");
   const { default: meetingsRouter } = await import("./routes/meetings");
+  const { default: pricingRouter } = await import("./routes/pricing");
 
   // Mount all API routes AFTER database connection
   app.use("/api/auth", authRouter);
@@ -90,6 +91,7 @@ const startServer = async () => {
   app.use("/api/hours", hoursRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/meetings", meetingsRouter);
+  app.use("/api/pricing", pricingRouter);
   // Debug routes only in development
   if (process.env.NODE_ENV !== "production") {
     app.use("/api/debug", debugRouter);
