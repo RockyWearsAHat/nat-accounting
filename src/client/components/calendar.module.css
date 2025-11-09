@@ -1042,6 +1042,13 @@
 	font-weight: 600;
 }
 
+.clientSubtitle {
+	font-size: 0.85rem;
+	color: #bbb;
+	font-style: italic;
+	margin: 0.25rem 0 0 0;
+}
+
 .pastLabel {
 	padding: 0.125rem 0.5rem;
 	background: #666;

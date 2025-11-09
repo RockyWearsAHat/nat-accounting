@@ -151,6 +151,9 @@ export function parseICalEvents(objects: any[], from: Date, to: Date) {
     const uid = obj.data.match(/UID:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || 'unknown';
     const summary = obj.data.match(/SUMMARY:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
     const rruleMatch = obj.data.match(/RRULE:(.+)/);
+    const urlMatch = obj.data.match(/URL:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
+    const description = obj.data.match(/DESCRIPTION:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
+    const location = obj.data.match(/LOCATION:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
     
     if (!dtstartMatch) continue;
     
@@ -188,6 +191,9 @@ export function parseICalEvents(objects: any[], from: Date, to: Date) {
             start: occurrence.toISOString(),
             end: occurrenceEnd.toISOString(),
             isRecurring: true,
+            url: urlMatch || undefined,
+            description: description || undefined,
+            location: location || undefined,
             raw: obj.data
           });
         }
@@ -201,6 +207,9 @@ export function parseICalEvents(objects: any[], from: Date, to: Date) {
             start: startDate.toISOString(),
             end: endDate.toISOString(),
             isRecurring: true,
+            url: urlMatch || undefined,
+            description: description || undefined,
+            location: location || undefined,
             raw: obj.data
           });
         }
@@ -215,6 +224,9 @@ export function parseICalEvents(objects: any[], from: Date, to: Date) {
           start: startDate.toISOString(),
           end: endDate.toISOString(),
           isRecurring: false,
+          url: urlMatch || undefined,
+          description: description || undefined,
+          location: location || undefined,
           raw: obj.data
         });
       }
@@ -238,6 +250,9 @@ function parseICalEventsAll(objects: any[]) {
     const uid = obj.data.match(/UID:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || 'unknown';
     const summary = obj.data.match(/SUMMARY:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
     const rruleMatch = obj.data.match(/RRULE:(.+)/);
+    const urlMatch = obj.data.match(/URL:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
+    const description = obj.data.match(/DESCRIPTION:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
+    const location = obj.data.match(/LOCATION:(.+)/)?.[1]?.split(/\r?\n/)[0].trim() || '';
     
     if (!dtstartMatch) continue;
     
@@ -275,6 +290,9 @@ function parseICalEventsAll(objects: any[]) {
         end: endDate.toISOString(),
         isRecurring: true,
         rrule: rruleStr,
+        url: urlMatch || undefined,
+        description: description || undefined,
+        location: location || undefined,
         raw: obj.data
       });
     } else {
@@ -285,6 +303,9 @@ function parseICalEventsAll(objects: any[]) {
         start: startDate.toISOString(),
         end: endDate.toISOString(),
         isRecurring: false,
+        url: urlMatch || undefined,
+        description: description || undefined,
+        location: location || undefined,
         raw: obj.data
       });
     }

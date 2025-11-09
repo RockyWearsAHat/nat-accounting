@@ -16,7 +16,7 @@ function requireAdmin(req: any, res: any, next: any) {
 // Clean, robust /schedule endpoint using shared iCloud session/cache state and strict Mountain Time
 router.post("/schedule", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { start, end, summary, description = "", location = "", videoUrl = "", zoomMeetingId = "", calendarId, provider, lengthMinutes } = req.body;
+    const { start, end, summary, description = "", location = "", videoUrl = "", zoomMeetingId = "", clientName = "", calendarId, provider, lengthMinutes } = req.body;
     if (!start || !summary || !calendarId || !provider) {
       return res.status(400).json({ error: "Missing required fields" });
     }
@@ -130,6 +130,7 @@ router.post("/schedule", requireAuth, requireAdmin, async (req, res) => {
       if (location) icsLines.push(`LOCATION:${location}`);
       if (videoUrl) icsLines.push(`URL:${videoUrl}`);
       if (zoomMeetingId) icsLines.push(`X-ZOOM-MEETING-ID:${zoomMeetingId}`);
+      if (clientName) icsLines.push(`X-CLIENT-NAME:${clientName}`);
       icsLines.push('END:VEVENT', 'END:VCALENDAR');
       let icsString = icsLines.join('\r\n');
       console.log('[calendar][schedule] ICS string to upload:', icsString);
@@ -160,7 +161,40 @@ router.post("/schedule", requireAuth, requireAdmin, async (req, res) => {
           return res.status(500).json({ error: 'Failed to upload event to iCloud', details: `${result.status} ${result.statusText}` });
         }
 
-        // Comprehensive cache invalidation for immediate UI updates
+        // Immediately write to MongoDB cache for consistency
+        const { CachedEventModel } = await import("../models/CachedEvent");
+        
+        const cachedEvent = {
+          eventId: uid,
+          calendarId: targetCalendar.displayName || "Business",
+          provider: 'icloud' as const,
+          title: summary,
+          start: mountainStart.toJSDate(),
+          end: mountainEnd.toJSDate(),
+          allDay: false,
+          description: description || undefined,
+          location: location || undefined,
+          url: videoUrl || undefined,
+          lastModified: new Date(),
+          syncedAt: new Date(),
+          blocking: true, // New scheduled appointments should block availability
+          deleted: false
+        };
+
+        try {
+          // Use upsert to handle duplicate key errors gracefully
+          await CachedEventModel.findOneAndUpdate(
+            { eventId: uid, provider: 'icloud' },
+            cachedEvent,
+            { upsert: true, new: true }
+          );
+          console.log('[calendar][schedule] Event written to MongoDB cache:', uid);
+        } catch (cacheError) {
+          console.warn('[calendar][schedule] Failed to write to cache (event still created in iCloud):', cacheError);
+          // Don't fail the request if cache write fails - the event was successfully created in iCloud
+        }
+
+        // Clear existing cache to force refresh
         const { clearAllCalendarCaches } = await import("../cache");
         await clearAllCalendarCaches("schedule");
         

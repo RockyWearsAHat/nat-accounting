@@ -1,0 +1,186 @@
+.previewContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(13, 14, 17, 0.92);
+  padding: 16px;
+  color: #f4f5f8;
+  height: 100%;
+  min-height: 0;
+}
+
+.previewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sheetName {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.instructions {
+  font-size: 0.8rem;
+  color: rgba(214, 216, 225, 0.74);
+}
+
+.tableWrapper {
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  flex: 1;
+  min-height: 0;
+  overscroll-behavior: contain;
+  background: #121317;
+  box-shadow: inset 0 0 0 1px rgba(10, 10, 12, 0.65);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+  font-size: 0.86rem;
+  color: #e6e8ef;
+}
+
+.table thead th,
+.table tbody th {
+  background-color: #1f2026 !important;
+  background-image: none !important;
+  color: #aeb4c3;
+}
+
+.table tbody tr:nth-child(odd) th,
+.table tbody tr:nth-child(even) th {
+  background-color: #1f2026 !important;
+}
+
+.cornerCell {
+  width: 48px;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  background-color: #1f2026 !important;
+  border-bottom: 1px solid #24252c;
+  border-right: 1px solid #24252c;
+}
+
+.columnHeader,
+.rowHeader {
+  background-color: #1f2026 !important;
+  background-image: none !important;
+  color: #a8acb7;
+  text-align: center;
+  cursor: pointer;
+  position: sticky;
+  font-weight: 600;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.columnHeader {
+  top: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid #24252c;
+  z-index: 3;
+}
+
+.rowHeader {
+  left: 0;
+  padding: 6px 12px;
+  border-right: 1px solid #24252c;
+  z-index: 2;
+}
+
+.cell {
+  padding: 0;
+  border-bottom: 1px solid #1f2024;
+  border-right: 1px solid #1f2024;
+  background: #15161b;
+  cursor: pointer;
+  min-width: 80px;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.cell:hover,
+.columnHeader:hover,
+.rowHeader:hover {
+  background: rgba(224, 225, 232, 0.18);
+  color: #f6f6f9;
+}
+
+.highlighted {
+  background: rgba(224, 225, 232, 0.24) !important;
+}
+
+.active {
+  outline: 2px solid rgba(232, 233, 240, 0.45);
+  outline-offset: -2px;
+}
+
+.cellContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  min-height: 28px;
+}
+
+.cellContentDropdown {
+  background: linear-gradient(90deg, rgba(222, 224, 232, 0.22) 0%, rgba(222, 224, 232, 0) 60%);
+  border-left: 2px solid rgba(224, 226, 236, 0.55);
+}
+
+.cellText {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdownIndicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dropdownBadge {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(226, 228, 236, 0.2);
+  color: #f1f2f6;
+  border: 1px solid rgba(234, 236, 244, 0.35);
+}
+
+.dropdownOptions {
+  font-size: 0.7rem;
+  color: #d7dae4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.dropdownCaret {
+  font-size: 0.7rem;
+  color: #eceef7;
+  flex-shrink: 0;
+}
+
+.emptyState {
+  padding: 40px;
+  text-align: center;
+  color: rgba(186, 191, 204, 0.7);
+}

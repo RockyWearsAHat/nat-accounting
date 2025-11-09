@@ -14,6 +14,15 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
+    "typeRoots": [
+      "./src/types",
+      "./node_modules/@types"
+    ],
+    "paths": {
+      "xlsx-calc": [
+        "./src/types/xlsx-calc/index.d.ts"
+      ]
+    },
 
     /* Linting */
     "strict": true,
@@ -27,7 +36,8 @@
     "*.ts",
     "*.tsx",
     "**/**/*.ts",
-    "**/**/*.tsx"
+    "**/**/*.tsx",
+    "**/*.d.ts"
   ],
   "exclude": [
     "node_modules/**",

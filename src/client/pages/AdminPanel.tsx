@@ -4,6 +4,8 @@ import { WeeklyCalendar } from '../components/WeeklyCalendar';
 import styles from '../components/calendar.module.css';
 import { ScheduleAppointmentModal } from '../components/ScheduleAppointmentModal';
 import { MeetingsSection } from '../components/MeetingsSection';
+import { CalendarEventsProvider } from '../contexts/CalendarEventsContext';
+import PricingCalculatorAdmin from '../components/PricingCalculatorAdmin';
 
 interface User { email:string; role:string; }
 interface CalendarConfig { calendars:any[]; whitelist:string[]; busyEvents?:string[]; colors?:Record<string,string>; }
@@ -47,27 +49,97 @@ const CalendarSettings: React.FC<{ config:CalendarConfig|null; onBusyToggle:(url
 // Main Admin Panel ------------------------------------------------
 export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, onLogout }) => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [config,setConfig] = useState<CalendarConfig|null>(null);
+  // Initialize config with cached data immediately
+  const [config,setConfig] = useState<CalendarConfig|null>(() => {
+    try {
+      const cachedConfig = localStorage.getItem('calendar-config');
+      if (cachedConfig) {
+        console.log('[AdminPanel] Initializing with cached config');
+        return JSON.parse(cachedConfig);
+      }
+    } catch (e) {
+      console.warn('[AdminPanel] Failed to load cached config on init:', e);
+    }
+    return null;
+  });
   const [settings,setSettings] = useState<{ timezone:string; businessName:string; businessHours:any }|null>(null);
   const [availableTimezones,setAvailableTimezones] = useState<any[]>([]);
-  const [hours,setHours] = useState<any|null>(null);
+  // Initialize hours with cached data immediately
+  const [hours,setHours] = useState<any|null>(() => {
+    try {
+      const cachedHours = localStorage.getItem('business-hours');
+      if (cachedHours) {
+        console.log('[AdminPanel] Initializing with cached hours');
+        return JSON.parse(cachedHours);
+      }
+    } catch (e) {
+      console.warn('[AdminPanel] Failed to load cached hours on init:', e);
+    }
+    return null;
+  });
   const [loadingWeek,setLoadingWeek] = useState(false);
   const [googleStatus,setGoogleStatus] = useState<{connected:boolean; expires?:string} | null>(null);
   const [connectingGoogle,setConnectingGoogle] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
 
 
   const loadConfig = async()=>{ 
-    try { 
+    try {
+      // Load cached config immediately for instant display
+      const cachedConfig = localStorage.getItem('calendar-config');
+      if (cachedConfig) {
+        try {
+          const parsed = JSON.parse(cachedConfig);
+          console.log('[AdminPanel] Loaded cached config:', parsed.calendars?.length, 'calendars');
+          setConfig(parsed);
+        } catch (e) {
+          console.warn('[AdminPanel] Invalid cached config, clearing:', e);
+          localStorage.removeItem('calendar-config');
+        }
+      }
+      
+      // Fetch fresh config in background
       const data = await http.get<any>('/api/icloud/config');
       // Only order on initial load, not on updates
       const ordered = [...data.calendars.filter((c:any)=>c.busy), ...data.calendars.filter((c:any)=>!c.busy)];
-      setConfig({ calendars: ordered, whitelist: data.whitelist, busyEvents: data.busyEvents||[], colors: data.colors||{} }); 
-    } catch(e){ console.error(e);} 
+      const freshConfig = { calendars: ordered, whitelist: data.whitelist, busyEvents: data.busyEvents||[], colors: data.colors||{} };
+      
+      // Cache the fresh config for next time
+      localStorage.setItem('calendar-config', JSON.stringify(freshConfig));
+      console.log('[AdminPanel] Cached fresh config:', freshConfig.calendars?.length, 'calendars');
+      
+      setConfig(freshConfig); 
+    } catch(e){ console.error('[AdminPanel] Config load failed:', e);} 
   };
   const loadSettings = async()=>{ try { const data = await http.get<any>('/api/settings'); setSettings(data.settings);} catch(e){ console.error(e);} };
   const loadTimezones = async()=>{ try { const data = await http.get<any>('/api/settings/timezones'); setAvailableTimezones(data.timezones);} catch(e){ console.error(e);} };
-  const loadHours = async()=>{ try { const data = await http.get<any>('/api/hours'); if(data.ok) setHours(data.hours);} catch(e){ console.error(e);} };
+  const loadHours = async()=>{ 
+    try { 
+      // Load cached hours immediately for instant display
+      const cachedHours = localStorage.getItem('business-hours');
+      if (cachedHours) {
+        try {
+          const parsed = JSON.parse(cachedHours);
+          console.log('[AdminPanel] Loaded cached business hours');
+          setHours(parsed);
+        } catch (e) {
+          console.warn('[AdminPanel] Invalid cached hours, clearing:', e);
+          localStorage.removeItem('business-hours');
+        }
+      }
+      
+      // Fetch fresh hours in background
+      const data = await http.get<any>('/api/hours'); 
+      if(data.ok) {
+        // Cache the fresh hours for next time
+        localStorage.setItem('business-hours', JSON.stringify(data.hours));
+        console.log('[AdminPanel] Cached fresh business hours');
+        setHours(data.hours);
+      }
+    } catch(e){ console.error('[AdminPanel] Hours load failed:', e);} 
+  };
 
   useEffect(()=>{ (async()=>{ await loadConfig(); await loadSettings(); await loadTimezones(); await loadHours(); })(); },[]);
   useEffect(()=>{ (async()=>{ try { const data = await http.get<any>('/api/google/status'); setGoogleStatus(data);} catch{} })(); },[]);
@@ -142,27 +214,30 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
           }
         }}
       />
-      <MeetingsSection onMeetingUpdate={() => {
-        loadConfig();
-        // Refresh calendar if possible
-        if (window.dispatchEvent) {
-          window.dispatchEvent(new CustomEvent('calendar-refresh'));
-        }
-      }} />
-      
-      <div className={styles.sectionCard}>
-        <h4>Calendar Display</h4>
+      <CalendarEventsProvider>
+        <MeetingsSection onMeetingUpdate={() => {
+          loadConfig();
+          // Refresh calendar if possible
+          if (window.dispatchEvent) {
+            window.dispatchEvent(new CustomEvent('calendar-refresh'));
+          }
+        }} />
+        
+        <div className={styles.sectionCard}>
+          <h4>Calendar Display</h4>
 
-      </div>
-      
-      <div className={styles.calendarWrapper}>
-        <WeeklyCalendar 
-          config={config} 
-          hours={hours} 
-          onConfigRefresh={loadConfig}
-          onConsultationUpdate={() => {}} // No consultations in admin panel
-        />
-      </div>
+        </div>
+        
+        <div className={styles.calendarWrapper}>
+          <WeeklyCalendar 
+            config={config} 
+            hours={hours} 
+            onConfigRefresh={loadConfig}
+            onConsultationUpdate={() => {}} // No consultations in admin panel
+          />
+        </div>
+        <PricingCalculatorAdmin />
+      </CalendarEventsProvider>
       <div className={styles.sectionCard}>
         <h4>Google Calendar Integration</h4>
         {googleStatus?.connected ? (

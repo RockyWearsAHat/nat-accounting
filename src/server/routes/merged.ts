@@ -127,7 +127,7 @@ router.get("/week", requireAdmin, async (req, res) => {
     }
   }
 
-  if (sources.has("icloud")) fetches.push(pull("icloud", "/api/icloud/week"));
+  if (sources.has("icloud")) fetches.push(pull("icloud", "/api/cached/range"));
   if (sources.has("google")) fetches.push(pull("google", "/api/google/week"));
 
   await Promise.all(fetches);
@@ -152,7 +152,7 @@ router.get("/week", requireAdmin, async (req, res) => {
 
   merged.sort((a, b) => String(a.start).localeCompare(String(b.start)));
 
-  res.json({
+  const response = {
     range: { start: from.toISOString(), end: to.toISOString() },
     events: merged,
     meta: {
@@ -160,7 +160,20 @@ router.get("/week", requireAdmin, async (req, res) => {
       filtered: { afterBlocking, afterCalendarFilter },
       sources: Array.from(sources),
     },
-  });
+  };
+
+  // Send response immediately
+  res.json(response);
+
+  // Trigger background sync to keep cache fresh (don't wait for it)
+  try {
+    const { syncService } = await import("../services/CalendarSyncService");
+    syncService.syncAllCalendars().catch(error => {
+      console.error("[merged/week] Background sync failed:", error);
+    });
+  } catch (syncError) {
+    console.error("[merged/week] Failed to trigger background sync:", syncError);
+  }
 });
 
 router.get("/all", requireAdmin, async (req, res) => {
@@ -246,14 +259,28 @@ router.get("/all", requireAdmin, async (req, res) => {
 
   merged.sort((a, b) => String(a.start).localeCompare(String(b.start)));
 
-  res.json({
+  const response = {
     events: merged,
-    meta: {
+    metadata: {
       sourceCounts,
       filtered: { afterBlocking, afterCalendarFilter },
       sources: Array.from(sources),
     },
-  });
+  };
+
+  // Send response immediately
+  res.json(response);
+
+  // Trigger background sync to keep cache fresh (don't wait for it)  
+  try {
+    const { syncService } = await import("../services/CalendarSyncService");
+    syncService.syncAllCalendars().catch(error => {
+      console.error("[merged/all] Background sync failed:", error);
+    });
+  } catch (syncError) {
+    console.error("[merged/all] Failed to trigger background sync:", syncError);
+  }
+
   return;
 });
 

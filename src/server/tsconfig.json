@@ -14,7 +14,16 @@
     "outDir": "../../dist/server",
     "noEmit": false,
     "allowImportingTsExtensions": false,
-    "types": ["node"]
+    "types": ["node"],
+    "typeRoots": [
+      "../../src/types",
+      "../../node_modules/@types"
+    ],
+    "paths": {
+      "xlsx-calc": [
+        "../../src/types/xlsx-calc/index.d.ts"
+      ]
+    }
   },
   "include": [
     "./**/*"

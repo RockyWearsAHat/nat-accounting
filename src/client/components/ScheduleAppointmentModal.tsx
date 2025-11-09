@@ -11,23 +11,57 @@ interface Props {
   onScheduled: (newEvent: CalendarEvent) => void; // Pass the new event directly to parent
   defaultDate?: string;
   eventToGoBackTo?: () => void; // Optional callback to show back button and handle back navigation
+  // Pre-populate fields for rescheduling
+  defaultTitle?: string;
+  defaultClientName?: string;
+  defaultDescription?: string;
+  defaultLocation?: string;
+  defaultVideoUrl?: string;
+  defaultTime?: string; // Format: "HH:MM"
+  defaultLength?: number;
+  excludeEventId?: string; // Event ID to exclude from availability conflicts (for rescheduling)
 }
 
 
-export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onScheduled, defaultDate, eventToGoBackTo }) => {
+export const ScheduleAppointmentModal: React.FC<Props> = ({ 
+  open, 
+  onClose, 
+  onScheduled, 
+  defaultDate, 
+  eventToGoBackTo,
+  defaultTitle = "",
+  defaultClientName = "",
+  defaultDescription = "",
+  defaultLocation = "",
+  defaultVideoUrl = "",
+  defaultTime = "",
+  defaultLength = 30,
+  excludeEventId
+}) => {
   const [form, setForm] = useState({
-    name: "",
-    description: "",
-    location: "",
-    videoUrl: "",
+    appointmentTitle: defaultTitle,
+    clientName: defaultClientName,
+    description: defaultDescription,
+    location: defaultLocation,
+    videoUrl: defaultVideoUrl,
     date: defaultDate || "",
-    time: "",
-    length: 30,
+    time: defaultTime,
+    length: defaultLength,
   });
   useEffect(() => {
-    if (defaultDate) setForm(f => ({ ...f, date: defaultDate }));
+    setForm(f => ({ 
+      ...f, 
+      appointmentTitle: defaultTitle,
+      clientName: defaultClientName,
+      description: defaultDescription,
+      location: defaultLocation,
+      videoUrl: defaultVideoUrl,
+      date: defaultDate || f.date,
+      time: defaultTime,
+      length: defaultLength,
+    }));
     // eslint-disable-next-line
-  }, [defaultDate]);
+  }, [defaultDate, defaultTitle, defaultClientName, defaultDescription, defaultLocation, defaultVideoUrl, defaultTime, defaultLength]);
   // Default to Mountain Time, but could fetch from settings API if needed
   const TIMEZONE = "America/Denver";
   const [buffer, setBuffer] = useState<string>("0");
@@ -56,6 +90,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
         date: form.date,
         duration: form.length,
         buffer: bufNum,
+        ...(excludeEventId && { excludeEventId }),
       }).then(data => setSlots(data.slots || [])).catch(() => setSlots([]));
       // Fetch all events for the day to check overlaps
       http.get<{ events: CalendarEvent[] }>(`/api/icloud/day`, { date: form.date })
@@ -152,7 +187,8 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     }
     // Reset all state
     setForm({
-      name: "",
+      appointmentTitle: "",
+      clientName: "",
       description: "",
       location: "",
       videoUrl: "",
@@ -188,7 +224,7 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
         appointmentStart = DateTime.fromFormat(`${form.date} ${form.time}`, "yyyy-MM-dd HH:mm", { zone: TIMEZONE });
       }
 
-      const clientName = form.name || "Client";
+      const clientName = form.clientName || "Client";
       
       const response = await http.post("/api/zoom/create-meeting", {
         topic: `Consultation with ${clientName}`,
@@ -213,6 +249,17 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     }
   };
 
+  // Generate appointment summary based on title and client name
+  const getAppointmentSummary = () => {
+    if (form.appointmentTitle && form.appointmentTitle.trim()) {
+      return form.appointmentTitle.trim();
+    } else if (form.clientName && form.clientName.trim()) {
+      return `Appointment with ${form.clientName.trim()}`;
+    } else {
+      return "Appointment";
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -228,10 +275,12 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     const lengthMinutes = Number(form.length);
     const end = start.plus({ minutes: lengthMinutes });
     
+    const appointmentSummary = getAppointmentSummary();
+    
     // Create optimistic event - show instantly in parent
     const optimisticEvent: CalendarEvent = {
       uid: `temp-${Date.now()}`,
-      summary: `${form.name} (Scheduling...)`,
+      summary: `${appointmentSummary} (Scheduling...)`,
       start: start.toISO() || '',
       end: end.toISO() || '',
       calendar: 'Business',
@@ -246,7 +295,8 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
     
     try {
       console.log("Scheduling appointment with data:", {
-        summary: form.name,
+        summary: appointmentSummary,
+        clientName: form.clientName,
         description: form.description,
         location: form.location,
         videoUrl: form.videoUrl,
@@ -260,7 +310,8 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          summary: form.name,
+          summary: appointmentSummary,
+          clientName: form.clientName,
           description: form.description,
           location: form.location,
           videoUrl: form.videoUrl,
@@ -364,12 +415,22 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({ open, onClose, onSch
         <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
           {/* Left column: Info */}
           <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <label style={{ fontWeight: 500 }}>Name*
+            <label style={{ fontWeight: 500 }}>Client Name*
               <input
-                name="name"
-                value={form.name}
+                name="clientName"
+                value={form.clientName}
                 onChange={handleChange}
                 required
+                placeholder="Client's full name"
+                style={{ width: '100%', marginTop: 4, padding: '0.5rem 0.7rem', borderRadius: 8, border: '1px solid #e5e5e5' }}
+              />
+            </label>
+            <label style={{ fontWeight: 500 }}>Appointment Title
+              <input
+                name="appointmentTitle"
+                value={form.appointmentTitle}
+                onChange={handleChange}
+                placeholder={form.clientName ? `Appointment with ${form.clientName}` : "Optional - defaults to 'Appointment with [Client Name]'"}
                 style={{ width: '100%', marginTop: 4, padding: '0.5rem 0.7rem', borderRadius: 8, border: '1px solid #e5e5e5' }}
               />
             </label>

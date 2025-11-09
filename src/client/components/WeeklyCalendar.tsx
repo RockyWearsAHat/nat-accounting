@@ -7,6 +7,7 @@ import { ScheduleAppointmentModal } from "./ScheduleAppointmentModal";
 import { EventModal } from "./EventModal";
 import { OverlapModal } from "./OverlapModal";
 import { expandEventsForWeek } from "../lib/rruleExpander";
+import { useCalendarEvents } from "../contexts/CalendarEventsContext";
 import styles from "./calendar.module.css";
 
 interface WeeklyCalendarProps {
@@ -69,6 +70,9 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastFetch, setLastFetch] = useState<number>(0);
+  
+  // Get calendar events context
+  const { setEvents: setContextEvents } = useCalendarEvents();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   // Remove selectedDayEvents state, use week cache
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -97,21 +101,12 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     let isCurrent = true;
     
     const fetchAllEvents = async () => {
-      const now = Date.now();
-      
-      // Only fetch if we haven't fetched recently (cache for 5 minutes)
-      if (allEvents.length > 0 && now - lastFetch < 5 * 60 * 1000) {
-        console.log(`[WeeklyCalendar] Using cached events (${allEvents.length} events)`);
-        return;
-      }
-      
       try {
         setLoading(true);
         console.log(`[WeeklyCalendar] Fetching all events from merged endpoint...`);
         
-        // Add cache busting when forcing refresh
-        const cacheParam = now - lastFetch < 1000 ? { _t: now } : {};
-        const data = await http.get<any>("/api/merged/all", cacheParam);
+        // Use merged endpoint - it's faster and has better optimizations
+        const data = await http.get<any>("/api/merged/all");
         console.log(`[WeeklyCalendar] Received ${data.events?.length || 0} total events`);
         if (data.metadata?.sourceCounts) {
           console.log(`[WeeklyCalendar] Sources:`, data.metadata.sourceCounts);
@@ -119,12 +114,14 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         
         if (isCurrent) {
           setAllEvents(data.events || []);
-          setLastFetch(now);
+          setContextEvents(data.events || []); // Share events with context
+          setLastFetch(Date.now());
         }
       } catch (error) {
         console.error("[WeeklyCalendar] Error loading all events:", error);
         if (isCurrent) {
           setAllEvents([]);
+          setContextEvents([]); // Clear context events too
         }
       } finally {
         if (isCurrent) setLoading(false);
@@ -140,7 +137,11 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       // Only handle delete events now - scheduling is handled by direct callback
       if (type === 'delete' && uid) {
         console.log(`[WeeklyCalendar] Optimistic delete: ${uid}`);
-        setAllEvents(prev => prev.filter(e => e.uid !== uid));
+        setAllEvents(prev => {
+          const filtered = prev.filter(e => e.uid !== uid);
+          setContextEvents(filtered); // Update context too
+          return filtered;
+        });
       }
     };
     
@@ -675,9 +676,9 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
       {/* Calendar grid */}
       <div className={styles.calendarContainer}>
         {loading && (
-          <div className={styles.calendarLoadingOverlay}>
+          <div className={styles.loadingIndicatorSmall}>
             <div className={styles.loadingSpinner}></div>
-            <div>Loading calendar events...</div>
+            <span>Updating events...</span>
           </div>
         )}
         
@@ -892,17 +893,19 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                           transition: 'all 0.15s ease',
                           cursor: 'pointer',
                           // Simple working border styling - only show borders when actively hovering
-                          border: (isOverlapHovered || isPartOfGroupHover) ? 
-                            (isOverlapHovered ? `1px solid ${stripeColor}` : `1px solid rgba(255, 255, 255, 0.2)`) : 
-                            'none',
+                          borderStyle: 'solid',
+                          borderWidth: (isOverlapHovered || isPartOfGroupHover) ? 1 : 0,
+                          borderColor: (isOverlapHovered || isPartOfGroupHover)
+                            ? (isOverlapHovered ? stripeColor : 'rgba(255, 255, 255, 0.2)')
+                            : 'transparent',
                           // FIXED: When hovering top event, stripe shows rounded bottom; when hovering bottom event, stripe shows rounded top
                           borderRadius: isPartOfGroupHover ? 
                             (hoveredEventIndex === topEventIndex ? '0px 0px 4px 4px' : 
                              hoveredEventIndex === bottomEventIndex ? '4px 4px 0px 0px' : '4px') : 
                             '4px',
                           // FIXED: Border logic - when hovering an event, remove the border that connects to that event, keep the border that shows the extent
-                          borderTop: (isPartOfGroupHover && hoveredEventIndex === topEventIndex) ? 'none' : undefined,
-                          borderBottom: (isPartOfGroupHover && hoveredEventIndex === bottomEventIndex) ? 'none' : undefined,
+                          borderTopWidth: (isPartOfGroupHover && hoveredEventIndex === topEventIndex) ? 0 : undefined,
+                          borderBottomWidth: (isPartOfGroupHover && hoveredEventIndex === bottomEventIndex) ? 0 : undefined,
                           // FIXED: Margin adjustments - overlap with the hovered event for seamless connection
                           marginTop: isPartOfGroupHover && hoveredEventIndex === topEventIndex ? '-2px' : '0',
                           marginBottom: isPartOfGroupHover && hoveredEventIndex === bottomEventIndex ? '-2px' : '0',
@@ -1006,7 +1009,11 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                           top: `calc(${ev.__startMinutes} * (var(--hour-height) / 60))`,
                           height: `calc(${ev.__durationMinutes} * (var(--hour-height) / 60))`,
                           backgroundColor: finalEventColor,
-                          borderColor: finalBorderColor,
+                          borderLeftColor: finalBorderColor,
+                          borderRightColor: finalBorderColor,
+                          borderTopColor: finalBorderColor,
+                          borderBottomColor: finalBorderColor,
+                          borderStyle: 'solid',
                           boxShadow: shouldBrighten ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
                           // FIXED: Only modify border radius for overlapping events when part of a group hover (seamless card mode)
                           borderRadius: (participatesInOverlap && isPartOfHoveredGroup) ? 
@@ -1035,7 +1042,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                             })() : 
                             '4px', // All other events always get full rounded corners
                           // FIXED: Only remove borders for seamless connection during group hover
-                          borderBottom: (participatesInOverlap && isPartOfHoveredGroup && 
+                          borderBottomWidth: (participatesInOverlap && isPartOfHoveredGroup && 
                             eventGroupIds.some(id => {
                               const stripe = stripes.find(s => s.groupId === id && (s.aIndex === i || s.bIndex === i));
                               if (!stripe) return false;
@@ -1044,8 +1051,8 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                               const eventAStartsEarlier = eventA.__startMinutes <= eventB.__startMinutes;
                               const bottomEventIndex = eventAStartsEarlier ? stripe.bIndex : stripe.aIndex;
                               return bottomEventIndex === i && hoveredEventIndex === i;
-                            })) ? 'none' : undefined,
-                          borderTop: (participatesInOverlap && isPartOfHoveredGroup && 
+                            })) ? 0 : undefined,
+                          borderTopWidth: (participatesInOverlap && isPartOfHoveredGroup && 
                             eventGroupIds.some(id => {
                               const stripe = stripes.find(s => s.groupId === id && (s.aIndex === i || s.bIndex === i));
                               if (!stripe) return false;
@@ -1054,7 +1061,7 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                               const eventAStartsEarlier = eventA.__startMinutes <= eventB.__startMinutes;
                               const topEventIndex = eventAStartsEarlier ? stripe.aIndex : stripe.bIndex;
                               return topEventIndex === i && hoveredEventIndex === i;
-                            })) ? 'none' : undefined,
+                            })) ? 0 : undefined,
                           // FIXED: Only adjust margins during group hover seamless connection
                           marginBottom: (participatesInOverlap && isPartOfHoveredGroup && 
                             eventGroupIds.some(id => {

@@ -13,6 +13,7 @@ export interface ICachedEvent {
   allDay: boolean;
   description?: string;
   location?: string;
+  url?: string;             // Video meeting URL (from iCal URL field)
   color?: string;
   
   // Metadata for sync management
@@ -43,6 +44,7 @@ const cachedEventSchema = new mongoose.Schema<ICachedEvent>({
   allDay: { type: Boolean, default: false },
   description: { type: String },
   location: { type: String },
+  url: { type: String },        // Video meeting URL
   color: { type: String },
   
   lastModified: { type: Date, required: true },
@@ -77,4 +79,6 @@ cachedEventSchema.index({ deletedAt: 1 }, {
   partialFilterExpression: { deleted: true }
 });
 
-export const CachedEventModel = mongoose.model<ICachedEvent>("CachedEvent", cachedEventSchema);
+export const CachedEventModel =
+  mongoose.models.CachedEvent ||
+  mongoose.model<ICachedEvent>("CachedEvent", cachedEventSchema);

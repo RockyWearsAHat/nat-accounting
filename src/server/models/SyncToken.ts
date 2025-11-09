@@ -65,4 +65,6 @@ syncTokenSchema.index({ nextSyncAt: 1 });
 syncTokenSchema.index({ isActive: 1 });
 syncTokenSchema.index({ isSyncing: 1 });
 
-export const SyncTokenModel = mongoose.model<ISyncToken>("SyncToken", syncTokenSchema);
+export const SyncTokenModel =
+  mongoose.models.SyncToken ||
+  mongoose.model<ISyncToken>("SyncToken", syncTokenSchema);

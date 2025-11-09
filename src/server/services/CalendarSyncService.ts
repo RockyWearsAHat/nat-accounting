@@ -265,7 +265,9 @@ export class CalendarSyncService {
             start: new Date(event.start),
             end: event.end ? new Date(event.end) : undefined,
             allDay: false, // parseICalEvents doesn't return allDay
-            description: undefined, // parseICalEvents doesn't return description
+            description: event.description,
+            location: event.location,
+            url: event.url,
             recurring: isRecurring,
             rrule: rruleString,
             raw: event.raw,
@@ -286,7 +288,9 @@ export class CalendarSyncService {
           start: new Date(event.start),
           end: event.end ? new Date(event.end) : undefined,
           allDay: false,
-          description: undefined,
+          description: event.description,
+          location: event.location,
+          url: event.url,
           recurring: isRecurring,
           rrule: rruleString,
           raw: event.raw,
