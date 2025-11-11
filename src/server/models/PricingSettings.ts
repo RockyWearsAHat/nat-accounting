@@ -11,7 +11,6 @@ export interface PricingLineOverride {
   lineId: string;
   defaultSelected?: boolean;
   defaultQuantity?: number;
-  defaultMaintenance?: boolean;
   customRates?: PricingRateOverride;
   notes?: string;
 }
@@ -48,7 +47,6 @@ const lineOverrideSchema = new Schema<PricingLineOverride>({
   lineId: { type: String, required: true },
   defaultSelected: { type: Boolean },
   defaultQuantity: { type: Number },
-  defaultMaintenance: { type: Boolean },
   customRates: { type: rateOverrideSchema, default: undefined },
   notes: { type: String },
 }, { _id: false, minimize: true });
@@ -68,7 +66,6 @@ const rateColumnsSchema = new Schema({
 const columnMappingSchema = new Schema({
   select: String,
   quantity: String,
-  maintenanceToggle: String,
   description: String,
   tier: String,
   service: String,
@@ -76,7 +73,6 @@ const columnMappingSchema = new Schema({
   type: String,
   unitPrice: String,
   lineTotal: String,
-  maintenanceTotal: String,
   rateColumns: { type: rateColumnsSchema },
 }, { _id: false, minimize: true });
 

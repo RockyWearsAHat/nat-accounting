@@ -13,7 +13,6 @@ export interface PricingWorkbookRateColumns {
 export interface PricingWorkbookColumnMapping {
   select: string;
   quantity: string;
-  maintenanceToggle: string;
   description?: string;
   tier: string;
   service: string;
@@ -21,14 +20,13 @@ export interface PricingWorkbookColumnMapping {
   type: string;
   unitPrice: string;
   lineTotal: string;
-  maintenanceTotal?: string;
   rateColumns: PricingWorkbookRateColumns;
 }
 
 export interface PricingWorkbookTotalsMapping {
   monthlySubtotal: string;
   oneTimeSubtotal: string;
-  maintenanceSubtotal: string;
+  maintenanceSubtotal?: string;
   grandTotal: string;
   ongoingMonthly?: string;
 }
@@ -70,7 +68,6 @@ export const DEFAULT_PRICING_WORKBOOK_MAPPING: PricingWorkbookMapping = {
   totals: {
     monthlySubtotal: "B32",
     oneTimeSubtotal: "B33",
-    maintenanceSubtotal: "B34",
     grandTotal: "B35",
     ongoingMonthly: "B36",
   },
@@ -82,19 +79,17 @@ export const DEFAULT_PRICING_WORKBOOK_MAPPING: PricingWorkbookMapping = {
   columns: {
     select: "A",
     quantity: "B",
-    maintenanceToggle: "C",
     description: undefined,
     tier: "D",
     service: "E",
     billing: "F",
     type: "T",
-    unitPrice: "R",
-    lineTotal: "S",
-    maintenanceTotal: "U",
+    unitPrice: "N",
+    lineTotal: "O",
     rateColumns: {
-      soloStartup: { low: "G", high: "H", maintenance: "I" },
-      smallBusiness: { low: "J", high: "K", maintenance: "L" },
-      midMarket: { low: "M", high: "N", maintenance: "O" },
+      soloStartup: { low: "F", high: "G", maintenance: undefined },
+      smallBusiness: { low: "H", high: "I", maintenance: undefined },
+      midMarket: { low: "J", high: "K", maintenance: undefined },
     },
   },
   quoteFields: {
@@ -148,7 +143,6 @@ export function mergeWorkbookMapping(
     columns: {
       select: o.columns?.select ?? base.columns.select,
       quantity: o.columns?.quantity ?? base.columns.quantity,
-      maintenanceToggle: o.columns?.maintenanceToggle ?? base.columns.maintenanceToggle,
       description: o.columns?.description ?? base.columns.description,
       tier: o.columns?.tier ?? base.columns.tier,
       service: o.columns?.service ?? base.columns.service,
@@ -156,7 +150,6 @@ export function mergeWorkbookMapping(
       type: o.columns?.type ?? base.columns.type,
       unitPrice: o.columns?.unitPrice ?? base.columns.unitPrice,
       lineTotal: o.columns?.lineTotal ?? base.columns.lineTotal,
-      maintenanceTotal: o.columns?.maintenanceTotal ?? base.columns.maintenanceTotal,
       rateColumns: {
         soloStartup: mergeRate(
           base.columns.rateColumns.soloStartup,
@@ -175,15 +168,15 @@ export function mergeWorkbookMapping(
     quoteFields:
       base.quoteFields || o.quoteFields
         ? {
-            clientName: o.quoteFields?.clientName ?? base.quoteFields?.clientName,
-            companyName: o.quoteFields?.companyName ?? base.quoteFields?.companyName,
-            preparedBy: o.quoteFields?.preparedBy ?? base.quoteFields?.preparedBy,
-            preparedForEmail:
-              o.quoteFields?.preparedForEmail ?? base.quoteFields?.preparedForEmail,
-            notes: o.quoteFields?.notes ?? base.quoteFields?.notes,
-            clientSize: o.quoteFields?.clientSize ?? base.quoteFields?.clientSize,
-            pricePoint: o.quoteFields?.pricePoint ?? base.quoteFields?.pricePoint,
-          }
+          clientName: o.quoteFields?.clientName ?? base.quoteFields?.clientName,
+          companyName: o.quoteFields?.companyName ?? base.quoteFields?.companyName,
+          preparedBy: o.quoteFields?.preparedBy ?? base.quoteFields?.preparedBy,
+          preparedForEmail:
+            o.quoteFields?.preparedForEmail ?? base.quoteFields?.preparedForEmail,
+          notes: o.quoteFields?.notes ?? base.quoteFields?.notes,
+          clientSize: o.quoteFields?.clientSize ?? base.quoteFields?.clientSize,
+          pricePoint: o.quoteFields?.pricePoint ?? base.quoteFields?.pricePoint,
+        }
         : undefined,
   };
 }

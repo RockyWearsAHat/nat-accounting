@@ -1,0 +1,906 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  min-height: 100vh;
+  background: #000000;
+  color: #ffffff;
+}
+
+/* Loading & Error States */
+.loading,
+.error {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.125rem;
+  color: #999;
+}
+
+.error {
+  color: #ff6666;
+}
+
+/* Header */
+.header {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #333;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.email {
+  font-size: 1rem;
+  color: #999;
+  margin: 0;
+}
+
+.website {
+  font-size: 0.875rem;
+  color: #ffffff;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.website:hover {
+  opacity: 0.7;
+}
+
+/* Tab Navigation */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #333;
+  margin-bottom: 2rem;
+}
+
+.tab {
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tab:hover {
+  color: #ffffff;
+}
+
+.tabActive {
+  color: #ffffff;
+  border-bottom-color: #ffffff;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  background: #ffffff;
+  color: #000000;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Content Area */
+.content {
+  min-height: 400px;
+}
+
+.tabContent {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Section */
+.section {
+  margin-bottom: 3rem;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+/* Buttons */
+.primaryButton {
+  padding: 0.75rem 1.5rem;
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.primaryButton:hover {
+  opacity: 0.85;
+}
+
+.secondaryButton {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.secondaryButton:hover {
+  background: #ffffff;
+  color: #000000;
+}
+
+.dangerButton {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: #ff6666;
+  border: 1px solid #ff6666;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dangerButton:hover {
+  background: #ff6666;
+  color: #ffffff;
+}
+
+.joinButton {
+  padding: 0.5rem 1rem;
+  background: #4CAF50;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.joinButton:hover {
+  opacity: 0.85;
+}
+
+/* Empty State */
+.emptyState {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #111;
+  border-radius: 8px;
+  color: #999;
+  border: 1px solid #222;
+}
+
+.emptyState p {
+  font-size: 1.125rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Appointments */
+.appointmentsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.appointmentCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.5rem;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  transition: box-shadow 0.2s;
+}
+
+.appointmentCard:hover {
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+.pastAppointment {
+  opacity: 0.5;
+}
+
+.appointmentInfo {
+  flex: 1;
+}
+
+.appointmentTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+}
+
+.appointmentDesc {
+  font-size: 0.875rem;
+  color: #999;
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.appointmentMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #999;
+}
+
+.appointmentTime,
+.appointmentLocation {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.appointmentActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Service Requests */
+.requestsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.requestCard {
+  padding: 1.5rem;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  transition: box-shadow 0.2s;
+}
+
+.requestCard:hover {
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+.requestHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.requestDate {
+  font-size: 0.875rem;
+  color: #999;
+}
+
+.requestServices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.serviceTag {
+  padding: 0.375rem 0.75rem;
+  background: #222;
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.requestNotes {
+  font-size: 0.875rem;
+  color: #999;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Status Badges */
+.statusBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.statusBadge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.statusBadge.approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.statusBadge.rejected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Invoices */
+.invoicesList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.invoiceCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  transition: box-shadow 0.2s;
+}
+
+.invoiceCard:hover {
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+.invoiceInfo {
+  flex: 1;
+}
+
+.invoiceNumber {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+}
+
+.invoiceAmount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.75rem 0;
+}
+
+.invoiceMeta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #999;
+  align-items: center;
+}
+
+.invoiceActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.statusBadge.draft {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.statusBadge.sent {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.statusBadge.paid {
+  background: #d4edda;
+  color: #155724;
+}
+
+.statusBadge.overdue {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .appointmentCard,
+  .invoiceCard {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .appointmentActions,
+  .invoiceActions {
+    width: 100%;
+  }
+
+  .appointmentActions button,
+  .appointmentActions a,
+  .invoiceActions button {
+    flex: 1;
+  }
+
+  .tabs {
+    overflow-x: auto;
+  }
+
+  .tab {
+    white-space: nowrap;
+  }
+}
+
+/* Documents Section */
+.documentsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.documentCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  transition: box-shadow 0.2s;
+}
+
+.documentCard:hover {
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+.documentInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.documentName {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: #ffffff;
+  word-break: break-word;
+}
+
+.documentMeta {
+  font-size: 0.875rem;
+  color: #999;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.documentActions {
+  display: flex;
+  gap: 0.75rem;
+  margin-left: 1rem;
+}
+
+.uploadingIndicator {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+  font-size: 0.875rem;
+}
+
+/* Header Actions */
+.headerActions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Breadcrumb Navigation */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.breadcrumbLink {
+  background: transparent;
+  border: none;
+  color: #999;
+  font-size: 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s;
+  padding: 0;
+}
+
+.breadcrumbLink:hover {
+  color: #ffffff;
+}
+
+.breadcrumbSeparator {
+  color: #555;
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.25rem;
+}
+
+.breadcrumbCurrent {
+  color: #ffffff;
+}
+
+/* Google Drive Style View */
+.driveView {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.foldersGrid,
+.filesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.folderItem,
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  transition: all 0.2s;
+  cursor: pointer;
+  position: relative;
+}
+
+.folderItem:hover,
+.fileItem:hover {
+  background: #1a1a1a;
+  border-color: #333;
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+.itemCheckbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+  accent-color: #ffffff;
+  flex-shrink: 0;
+}
+
+.folderIcon,
+.fileIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+}
+
+.folderDetails,
+.fileDetails {
+  flex: 1;
+  min-width: 0;
+}
+
+.folderName,
+.fileName {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folderCount,
+.fileMeta {
+  font-size: 0.8125rem;
+  color: #999;
+  margin-top: 0.25rem;
+}
+
+.fileActions {
+  display: flex;
+  gap: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.fileItem:hover .fileActions {
+  opacity: 1;
+}
+
+.actionButton {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.actionButton:hover {
+  background: #222;
+  border-color: #ffffff;
+}
+
+.emptyFolder {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #999;
+  font-size: 1rem;
+}
+
+/* Folder Organization */
+.foldersRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1rem 0;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #222;
+}
+
+.folderChip {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: #999;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.folderChip:hover {
+  background: #111;
+  color: #ffffff;
+}
+
+.folderChipActive {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.folderTag {
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.fileCheckbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+  accent-color: #ffffff;
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+/* Folder Modal */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modalContent {
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modalTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+}
+
+.modalDesc {
+  font-size: 0.875rem;
+  color: #999;
+  margin: 0 0 1.5rem 0;
+}
+
+.folderSelect {
+  margin-bottom: 1.5rem;
+}
+
+.folderSelect label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 0.5rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem;
+  background: #000;
+  color: #ffffff;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #ffffff;
+}
+
+.colorInput {
+  width: 100%;
+  height: 3rem;
+  padding: 0.25rem;
+  background: #000;
+  border: 1px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.existingFolders {
+  margin-bottom: 1.5rem;
+}
+
+.existingFolders label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #999;
+  margin-bottom: 0.75rem;
+}
+
+.existingFoldersList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.existingFolderBtn {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.existingFolderBtn:hover {
+  background: #222;
+  border-color: #ffffff;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+.cancelButton {
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  color: #999;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+.confirmButton {
+  padding: 0.75rem 1.5rem;
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.confirmButton:hover {
+  opacity: 0.85;
+}

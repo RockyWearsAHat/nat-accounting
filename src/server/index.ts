@@ -77,6 +77,15 @@ const startServer = async () => {
   const { default: zoomRouter } = await import("./routes/zoom");
   const { default: meetingsRouter } = await import("./routes/meetings");
   const { default: pricingRouter } = await import("./routes/pricing");
+  console.log("✅ Pricing router imported");
+  const { default: clientRouter } = await import("./routes/client");
+  console.log("✅ Client router imported");
+  const { default: documentsRouter } = await import("./routes/documents");
+  console.log("✅ Documents router imported successfully");
+  const { default: subscriptionsRouter } = await import("./routes/subscriptions");
+  console.log("✅ Subscriptions router imported successfully");
+  const { default: invoicesRouter } = await import("./routes/invoices");
+  console.log("✅ Invoices router imported successfully");
 
   // Mount all API routes AFTER database connection
   app.use("/api/auth", authRouter);
@@ -92,6 +101,14 @@ const startServer = async () => {
   app.use("/api/settings", settingsRouter);
   app.use("/api/meetings", meetingsRouter);
   app.use("/api/pricing", pricingRouter);
+  app.use("/api/client", clientRouter);
+  app.use("/api/client/documents", documentsRouter);
+  app.use("/api/subscriptions", subscriptionsRouter);
+  app.use("/api/invoices", invoicesRouter);
+  console.log("✅ Pricing router mounted at /api/pricing");
+  console.log("✅ Documents router mounted at /api/client/documents");
+  console.log("✅ Subscriptions router mounted at /api/subscriptions");
+  console.log("✅ Invoices router mounted at /api/invoices");
   // Debug routes only in development
   if (process.env.NODE_ENV !== "production") {
     app.use("/api/debug", debugRouter);
@@ -101,7 +118,7 @@ const startServer = async () => {
   // Initialize calendar cache immediately on startup
   console.log("🚀 Starting calendar cache initialization...");
   const { initializeCalendarCache, startBackgroundSync } = await import("./services/CalendarInitializer");
-  
+
   // Populate cache with all existing events on startup
   try {
     console.log("📅 Calling initializeCalendarCache...");
@@ -111,7 +128,7 @@ const startServer = async () => {
     console.error("❌ Calendar cache initialization failed:", error);
     // Continue startup even if cache init fails
   }
-  
+
   // Start background sync for ongoing updates
   startBackgroundSync();
 

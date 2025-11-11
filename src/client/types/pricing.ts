@@ -23,7 +23,6 @@ export interface PricingLineMetadata {
   type: string;
   defaultSelected: boolean;
   defaultQuantity: number;
-  defaultMaintenance: boolean;
   baseRates: PricingRateOverride;
 }
 
@@ -42,7 +41,6 @@ export interface PricingWorkbookRateColumns {
 export interface PricingWorkbookColumnMapping {
   select: string;
   quantity: string;
-  maintenanceToggle: string;
   description?: string;
   tier: string;
   service: string;
@@ -50,14 +48,13 @@ export interface PricingWorkbookColumnMapping {
   type: string;
   unitPrice: string;
   lineTotal: string;
-  maintenanceTotal?: string;
   rateColumns: PricingWorkbookRateColumns;
 }
 
 export interface PricingWorkbookTotalsMapping {
   monthlySubtotal: string;
   oneTimeSubtotal: string;
-  maintenanceSubtotal: string;
+  maintenanceSubtotal?: string;
   grandTotal: string;
   ongoingMonthly?: string;
 }
@@ -121,7 +118,6 @@ export interface PricingServiceBlueprint {
   description?: string;
   defaultSelected?: boolean;
   defaultQuantity?: number;
-  defaultMaintenance?: boolean;
   rateBands: Partial<Record<PricingClientSegment, PricingRateBand>>;
   estimatedEffortNotes?: string;
   components?: PricingServiceComponentBlueprint[];
@@ -137,7 +133,6 @@ export interface PricingServiceBlueprintOverride {
   description?: string;
   defaultSelected?: boolean;
   defaultQuantity?: number;
-  defaultMaintenance?: boolean;
   rateBands?: Partial<Record<PricingClientSegment, PricingRateBand>>;
   estimatedEffortNotes?: string;
   tags?: string[];
@@ -241,9 +236,9 @@ export interface PricingWorkbookUpdateResponse {
 export interface PricingTotals {
   monthlySubtotal: number;
   oneTimeSubtotal: number;
-  maintenanceSubtotal: number;
   grandTotalMonthOne: number;
   ongoingMonthly: number;
+  maintenanceSubtotal?: number;
 }
 
 export interface PricingLineResult {
@@ -253,12 +248,10 @@ export interface PricingLineResult {
   billing: string;
   selected: boolean;
   quantity: number;
-  includeMaintenance: boolean;
   unitPrice: number;
   overridePrice?: number | null;
   effectiveUnitPrice: number;
   lineTotal: number;
-  maintenanceAmount: number;
   type: string;
 }
 
@@ -286,7 +279,6 @@ export interface PricingSettings {
     lineId: string;
     defaultSelected?: boolean;
     defaultQuantity?: number;
-    defaultMaintenance?: boolean;
     customRates?: PricingRateOverride;
     notes?: string;
   }>;
@@ -300,13 +292,13 @@ export interface QuoteDetails {
   preparedBy?: string;
   preparedForEmail?: string;
   notes?: string;
+  customInvoiceName?: string;
 }
 
 export interface LineSelection {
   lineId: string;
   selected?: boolean;
   quantity?: number;
-  includeMaintenance?: boolean;
   overridePrice?: number | null;
   rateOverrides?: PricingRateOverride;
 }

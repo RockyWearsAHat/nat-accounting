@@ -20,11 +20,18 @@ const clientRegisterSchema = baseRegisterSchema.extend({
 });
 router.post("/register", async (req, res) => {
   const parsed = clientRegisterSchema.safeParse(req.body);
-  if (!parsed.success)
-    return res.status(400).json({ error: parsed.error.flatten() });
+  if (!parsed.success) {
+    // Return both flattened errors and a user-friendly message
+    const flattened = parsed.error.flatten();
+    const firstError = Object.values(flattened.fieldErrors)[0]?.[0] || flattened.formErrors[0] || "Validation failed";
+    return res.status(400).json({
+      error: flattened,
+      message: firstError
+    });
+  }
   const { email, password, company, website } = parsed.data;
   const existing = await User.findOne({ email });
-  if (existing) return res.status(409).json({ error: "exists" });
+  if (existing) return res.status(409).json({ error: "exists", message: "Email already registered" });
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await User.create({ email, passwordHash, company, website });
   res
@@ -41,16 +48,16 @@ router.post("/login", async (req, res) => {
   if (!parsed.success)
     return res.status(400).json({ error: parsed.error.flatten() });
   const { email, password } = parsed.data;
-  
+
   // Find user by email
   const user: any = await User.findOne({ email });
   const passwordField = 'passwordHash';
-  
+
   if (!user) return res.status(401).json({ error: "invalid_credentials" });
-  
+
   const match = await bcrypt.compare(password, user[passwordField]);
   if (!match) return res.status(401).json({ error: "invalid_credentials" });
-  
+
   const payload = {
     id: user._id.toString(),
     email: user.email,

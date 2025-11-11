@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ConsultationForm } from "../sections/ConsultationForm";
 import { WeeklyCalendar } from "../components/WeeklyCalendar"; // still used on public pages if needed
 import { AdminPanel } from "./AdminPanel";
+import { ClientProfile } from "./ClientProfile";
 import { LoginForm } from "../components/auth/LoginForm";
 import { RegisterForm } from "../components/auth/RegisterForm";
 import { http } from "../lib/http";
@@ -68,6 +69,14 @@ const ProtectedRoute: React.FC<{
 }> = ({ user, children }) => {
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== "admin") return <Navigate to="/" replace />;
+  return children;
+};
+
+const ClientRoute: React.FC<{
+  user: User | null;
+  children: React.ReactElement;
+}> = ({ user, children }) => {
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 };
 
@@ -148,6 +157,14 @@ const Layout: React.FC<{
                 </Link>
               </>
             )}
+            {user.role === "user" && (
+              <>
+                <span>| </span>
+                <Link to="/profile" style={navLink}>
+                  My Profile
+                </Link>
+              </>
+            )}
             <span>| </span>
             <button onClick={onLogout} style={linkBtn}>
               Logout
@@ -223,6 +240,16 @@ export const App: React.FC = () => {
             <ProtectedRoute user={user}>
               <AdminPanel user={user as User} onLogout={logout} />
             </ProtectedRoute>
+          </Layout>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <Layout user={user} onLogout={logout}>
+            <ClientRoute user={user}>
+              <ClientProfile />
+            </ClientRoute>
           </Layout>
         }
       />

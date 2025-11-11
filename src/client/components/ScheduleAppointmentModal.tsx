@@ -73,6 +73,23 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({
   const [overlapWarning, setOverlapWarning] = useState<string | null>(null);
   const [creatingZoomMeeting, setCreatingZoomMeeting] = useState(false);
   const [zoomMeetingId, setZoomMeetingId] = useState<string | null>(null);
+  const [users, setUsers] = useState<Array<{ _id: string; email: string; company?: string }>>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+
+  // Load users on mount
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const usersData = await http.get<Array<{ _id: string; email: string; company?: string }>>("/api/subscriptions/admin/users");
+        setUsers(usersData);
+      } catch (err) {
+        console.error("Failed to load users:", err);
+      }
+    };
+    if (open) {
+      loadUsers();
+    }
+  }, [open]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -415,15 +432,36 @@ export const ScheduleAppointmentModal: React.FC<Props> = ({
         <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
           {/* Left column: Info */}
           <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <label style={{ fontWeight: 500 }}>Client Name*
-              <input
-                name="clientName"
-                value={form.clientName}
-                onChange={handleChange}
+            <label style={{ fontWeight: 500 }}>Select Client*
+              <select
+                value={selectedUserId}
+                onChange={(e) => {
+                  setSelectedUserId(e.target.value);
+                  const selectedUser = users.find(u => u._id === e.target.value);
+                  if (selectedUser) {
+                    setForm(f => ({ 
+                      ...f, 
+                      clientName: selectedUser.company || selectedUser.email 
+                    }));
+                  }
+                }}
                 required
-                placeholder="Client's full name"
-                style={{ width: '100%', marginTop: 4, padding: '0.5rem 0.7rem', borderRadius: 8, border: '1px solid #e5e5e5' }}
-              />
+                style={{ 
+                  width: '100%', 
+                  marginTop: 4, 
+                  padding: '0.5rem 0.7rem', 
+                  borderRadius: 8, 
+                  border: '1px solid #e5e5e5',
+                  backgroundColor: '#fff'
+                }}
+              >
+                <option value="">-- Select a client --</option>
+                {users.map(user => (
+                  <option key={user._id} value={user._id}>
+                    {user.company ? `${user.company} (${user.email})` : user.email}
+                  </option>
+                ))}
+              </select>
             </label>
             <label style={{ fontWeight: 500 }}>Appointment Title
               <input

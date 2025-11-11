@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import styles from "./PricingCalculatorAdmin.module.css";
-import WorkbookMappingWizard from "./WorkbookMappingWizard";
+import WorkbookMappingWizard, { createEmptyWorkbookMapping } from "./WorkbookMappingWizard";
 
 import { http } from "../lib/http";
 
@@ -32,7 +32,7 @@ import type {
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-  minimumFractionDigits: 0,
+  minimumFractionDigits: 2,
 });
 
 const rateColumnLabels: Record<keyof PricingWorkbookRateColumns, string> = {
@@ -45,10 +45,48 @@ const rateSegments = Object.keys(rateColumnLabels) as Array<
   keyof PricingWorkbookRateColumns
 >;
 
+const clientSizeRateKey: Record<ClientSize, keyof PricingWorkbookRateColumns> = {
+  "Solo/Startup": "soloStartup",
+  "Small Business": "smallBusiness",
+  "Mid-Market": "midMarket",
+};
+
+function toNumeric(value?: number | null): number | undefined {
+  if (value == null) return undefined;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function resolveBaseUnitPrice(
+  line: PricingLineMetadata,
+  clientSize: ClientSize,
+  pricePoint: PricePoint
+): number {
+  const segmentKey = clientSizeRateKey[clientSize];
+  const segmentRates = line.baseRates[segmentKey];
+  if (!segmentRates) return 0;
+
+  const low = toNumeric(segmentRates.low ?? undefined);
+  const high = toNumeric(segmentRates.high ?? undefined);
+
+  switch (pricePoint) {
+    case "Low":
+      return low ?? high ?? 0;
+    case "High":
+      return high ?? low ?? 0;
+    case "Midpoint":
+      if (low != null && high != null) {
+        return (low + high) / 2;
+      }
+      return low ?? high ?? 0;
+    default:
+      return 0;
+  }
+}
+
 interface LineState {
   selected: boolean;
   quantity: number;
-  includeMaintenance: boolean;
   overridePrice: number | null;
   overrideDraft: string;
   rateOverrides?: LineSelection["rateOverrides"];
@@ -67,7 +105,6 @@ interface LineOverridePayload {
   lineId: string;
   defaultSelected: boolean;
   defaultQuantity: number;
-  defaultMaintenance: boolean;
   customRates?: LineSelection["rateOverrides"];
 }
 
@@ -90,7 +127,6 @@ function buildLineState(
   return {
     selected: selection?.selected ?? meta.defaultSelected,
     quantity: selection?.quantity ?? meta.defaultQuantity ?? 1,
-    includeMaintenance: selection?.includeMaintenance ?? meta.defaultMaintenance,
     overridePrice,
     overrideDraft: overridePrice != null ? String(overridePrice) : "",
     rateOverrides: selection?.rateOverrides,
@@ -121,7 +157,6 @@ function buildSelections(form: FormState): LineSelection[] {
     lineId,
     selected: state.selected,
     quantity: state.quantity,
-    includeMaintenance: state.includeMaintenance,
     overridePrice: state.overridePrice,
     rateOverrides: state.rateOverrides,
   }));
@@ -138,8 +173,7 @@ function collectLineOverrides(
 
       const selectionChanged =
         state.selected !== line.defaultSelected ||
-        state.quantity !== line.defaultQuantity ||
-        state.includeMaintenance !== line.defaultMaintenance;
+        state.quantity !== line.defaultQuantity;
 
       const hasRateOverrides = Boolean(
         state.rateOverrides && Object.keys(state.rateOverrides).length > 0
@@ -153,7 +187,6 @@ function collectLineOverrides(
         lineId: line.id,
         defaultSelected: state.selected,
         defaultQuantity: state.quantity,
-        defaultMaintenance: state.includeMaintenance,
       };
 
       if (hasRateOverrides && state.rateOverrides) {
@@ -200,6 +233,43 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
   const [setupRequired, setSetupRequired] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [emailRecipient, setEmailRecipient] = useState("");
+  const [users, setUsers] = useState<Array<{ _id: string; email: string; company?: string }>>([]);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+  const [userInvoices, setUserInvoices] = useState<Array<{
+    _id: string;
+    invoiceNumber: string;
+    customName?: string;
+    status: string;
+    total: number;
+    createdAt: string;
+    billingMonth: string;
+  }>>([]);
+  const [billingDay, setBillingDay] = useState(15);
+  const [creatingSubscription, setCreatingSubscription] = useState(false);
+  const [mappingExpanded, setMappingExpanded] = useState(false);
+  const basePriceKey = form ? `${form.clientSize}|${form.pricePoint}` : "none";
+
+  const applyWorkbookResponse = useCallback((response: PricingWorkbookUpdateResponse) => {
+    setMapping(response.mapping);
+
+    if (response.workbook) {
+      setWorkbookInfo(response.workbook);
+      setBlueprint(response.workbook.blueprint ?? null);
+      setBlueprintOverrides(response.workbook.blueprintOverrides ?? null);
+      setMergedBlueprint(
+        response.workbook.blueprintMerged ?? response.workbook.blueprint ?? null
+      );
+    }
+
+    if (response.settings) {
+      setSettings(response.settings);
+      setEmailRecipient((response.settings.exportedEmailRecipients || []).join(", "));
+    }
+
+    return response;
+  }, []);
 
   const loadBootstrap = useCallback(
     async (withSpinner = false) => {
@@ -208,7 +278,14 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
       }
 
       try {
+        console.log("[PricingCalculator] Fetching bootstrap data...");
         const bootstrap = await http.get<PricingBootstrapResponse>("/api/pricing");
+        console.log("[PricingCalculator] Bootstrap received:", {
+          hasMetadata: !!bootstrap.metadata,
+          hasDefaults: !!bootstrap.defaults,
+          setupRequired: bootstrap.setupRequired,
+          message: bootstrap.message
+        });
 
         setMetadata(bootstrap.metadata ?? null);
         setSettings(bootstrap.settings ?? null);
@@ -221,14 +298,18 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
         );
 
         if (bootstrap.metadata && bootstrap.defaults) {
+          console.log("[PricingCalculator] Creating form state with metadata");
           setForm(createFormState(bootstrap.metadata, bootstrap.defaults));
         } else {
+          console.log("[PricingCalculator] No metadata/defaults, setting form to null");
           setForm(null);
         }
 
         setCalculation(null);
         setEmailRecipient((bootstrap.settings?.exportedEmailRecipients || []).join(", "));
         setSetupRequired(Boolean(bootstrap.setupRequired || !bootstrap.metadata));
+
+        console.log("[PricingCalculator] State updated, setupRequired:", Boolean(bootstrap.setupRequired || !bootstrap.metadata));
 
         if (bootstrap.message) {
           setStatus(bootstrap.message);
@@ -240,11 +321,12 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
 
         return bootstrap;
       } catch (error: any) {
-        console.error("Failed to load pricing calculator bootstrap", error);
+        console.error("[PricingCalculator] Failed to load bootstrap", error);
         setStatus(error?.data?.error || "Failed to load pricing calculator.");
         return null;
       } finally {
         if (withSpinner) {
+          console.log("[PricingCalculator] Setting loading to false");
           setLoading(false);
         }
       }
@@ -255,6 +337,113 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
   useEffect(() => {
     void loadBootstrap(true);
   }, [loadBootstrap]);
+
+  // Load users for client selector
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const usersData = await http.get<Array<{ _id: string; email: string; company?: string }>>(
+          "/api/subscriptions/admin/users"
+        );
+        setUsers(usersData);
+      } catch (error) {
+        console.error("[PricingCalculator] Failed to load users:", error);
+      }
+    };
+    void loadUsers();
+  }, []);
+
+  // Load user's invoices when client is selected
+  useEffect(() => {
+    if (!selectedUserId) {
+      setUserInvoices([]);
+      setSelectedInvoiceId("");
+      return;
+    }
+
+    const loadUserInvoices = async () => {
+      try {
+        const invoices = await http.get<Array<{
+          _id: string;
+          invoiceNumber: string;
+          status: string;
+          total: number;
+          createdAt: string;
+          billingMonth: string;
+        }>>(`/api/invoices/admin/invoices?userId=${selectedUserId}`);
+        setUserInvoices(invoices);
+      } catch (error) {
+        console.error("[PricingCalculator] Failed to load user invoices:", error);
+      }
+    };
+    void loadUserInvoices();
+  }, [selectedUserId]);
+
+  // Load user's current subscription data when client is selected
+  useEffect(() => {
+    if (!selectedUserId || !metadata) return;
+
+    const loadUserData = async () => {
+      try {
+        const userData = await http.get<{
+          subscription: { recurringServices: Array<{ serviceName: string; quantity: number; unitPrice: number }> } | null;
+          latestInvoice: any;
+          pendingServices: Array<{ serviceName: string; quantity: number; unitPrice: number }>;
+        }>(`/api/invoices/admin/user/${selectedUserId}/current`);
+
+        const selectedUser = users.find(u => u._id === selectedUserId);
+        if (!selectedUser) return;
+
+        // Prefill client details
+        setForm(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            quoteDetails: {
+              ...prev.quoteDetails,
+              clientName: selectedUser.company || selectedUser.email,
+              companyName: selectedUser.company || "",
+              preparedForEmail: selectedUser.email,
+            },
+          };
+        });
+
+        // Prefill recurring services from subscription (if exists)
+        const subscription = userData.subscription;
+        if (subscription && subscription.recurringServices) {
+          setForm(prev => {
+            if (!prev) return prev;
+            const updatedLines = { ...prev.lines };
+
+            // Check all recurring services in subscription
+            for (const service of subscription.recurringServices) {
+              const matchingLine = metadata.lineItems.find(
+                line => line.service === service.serviceName
+              );
+              if (matchingLine) {
+                updatedLines[matchingLine.id] = {
+                  ...updatedLines[matchingLine.id],
+                  selected: true,
+                  quantity: service.quantity,
+                  overridePrice: service.unitPrice,
+                  overrideDraft: String(service.unitPrice),
+                };
+              }
+            }
+
+            return { ...prev, lines: updatedLines };
+          });
+        }
+
+        setStatus(`Loaded data for ${selectedUser.company || selectedUser.email}`);
+      } catch (error) {
+        console.error("[PricingCalculator] Failed to load user data:", error);
+        setStatus("Failed to load client data");
+      }
+    };
+
+    void loadUserData();
+  }, [selectedUserId, metadata, users]);
 
   const runRecalculate = useCallback(
     async (state: FormState) => {
@@ -286,6 +475,15 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
     if (!metadata || !form) return;
     void runRecalculate(form);
   }, [metadata, form, runRecalculate]);
+
+  const defaultPriceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!metadata || !form) return map;
+    for (const line of metadata.lineItems) {
+      map.set(line.id, resolveBaseUnitPrice(line, form.clientSize, form.pricePoint));
+    }
+    return map;
+  }, [metadata, basePriceKey]);
 
   const handleLineChange = useCallback((lineId: string, patch: LinePatch) => {
     setForm((previous) => {
@@ -403,6 +601,300 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
     [emailRecipient, form, settings]
   );
 
+  const handleSaveInvoiceDraft = useCallback(
+    async (status: "admin-draft" | "pending-approval" | "sent") => {
+      if (!selectedUserId) {
+        setStatus("Please select a client first");
+        return;
+      }
+      if (!calculation) {
+        setStatus("Please wait for calculation to complete");
+        return;
+      }
+      if (!form) {
+        setStatus("Form data is missing");
+        return;
+      }
+
+      setSaving(true);
+      setStatus(null);
+
+      try {
+        const selectedUser = users.find(u => u._id === selectedUserId);
+        if (!selectedUser) {
+          setStatus("Selected client not found");
+          return;
+        }
+
+        const now = new Date();
+        const billingMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        // Only include selected services in the invoice
+        const selectedLines = calculation.lines.filter(line => {
+          const lineState = form.lines[line.id];
+          return lineState && lineState.selected;
+        });
+
+        // Calculate totals based only on selected items
+        const selectedSubtotal = selectedLines.reduce((sum, line) => sum + line.lineTotal, 0);
+
+        const invoicePayload = {
+          userId: selectedUserId,
+          userEmail: selectedUser.email,
+          lineItems: selectedLines.map(line => ({
+            description: line.service,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            amount: line.lineTotal,
+          })),
+          subtotal: selectedSubtotal,
+          tax: 0,
+          total: selectedSubtotal,
+          dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+          billingMonth,
+          notes: form.quoteDetails.notes || "",
+          customName: form.quoteDetails.customInvoiceName || "",
+          status,
+        };
+
+        // Update existing invoice if one is selected, otherwise create new
+        if (selectedInvoiceId) {
+          // Update existing invoice
+          await http.put(`/api/invoices/admin/invoices/${selectedInvoiceId}`, invoicePayload);
+          
+          if (status === "admin-draft") {
+            setStatus("Draft updated (admin only)");
+          } else if (status === "pending-approval") {
+            setStatus(`Invoice updated and sent for approval to ${selectedUser.company || selectedUser.email}`);
+          } else if (status === "sent") {
+            await http.post(`/api/invoices/admin/invoices/${selectedInvoiceId}/publish`);
+            setStatus(`Invoice updated and published to ${selectedUser.company || selectedUser.email}`);
+          }
+        } else {
+          // Create new invoice
+          let endpoint = "/api/invoices/admin/invoices";
+          if (status === "sent") {
+            // For direct publish, create as admin-draft first, then publish
+            const createResponse = await http.post<{ success: boolean; invoice: { _id: string } }>(
+              endpoint,
+              { ...invoicePayload, status: "admin-draft" }
+            );
+            
+            await http.post(`/api/invoices/admin/invoices/${createResponse.invoice._id}/publish`);
+            setSelectedInvoiceId(createResponse.invoice._id);
+            
+            setStatus(`Invoice published and sent to ${selectedUser.company || selectedUser.email}`);
+          } else {
+            const createResponse = await http.post<{ success: boolean; invoice: { _id: string } }>(
+              endpoint,
+              invoicePayload
+            );
+            setSelectedInvoiceId(createResponse.invoice._id);
+            
+            if (status === "admin-draft") {
+              setStatus("Draft saved (admin only)");
+            } else if (status === "pending-approval") {
+              setStatus(`Invoice sent for approval to ${selectedUser.company || selectedUser.email}`);
+            }
+          }
+        }
+
+        // Refresh invoice list after saving
+        const invoices = await http.get<Array<{
+          _id: string;
+          invoiceNumber: string;
+          status: string;
+          total: number;
+          createdAt: string;
+          billingMonth: string;
+        }>>(`/api/invoices/admin/invoices?userId=${selectedUserId}`);
+        setUserInvoices(invoices);
+      } catch (error: any) {
+        console.error("Failed to save invoice draft:", error);
+        setStatus(error?.data?.error || "Failed to save invoice. Please try again.");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [selectedUserId, calculation, form, users]
+  );
+
+  const handleLoadInvoice = useCallback(
+    async (invoiceId: string) => {
+      if (!metadata || !form) return;
+
+      setLoading(true);
+      setStatus(null);
+
+      try {
+        const invoice = await http.get<{
+          _id: string;
+          userId: string;
+          userEmail: string;
+          invoiceNumber: string;
+          customName?: string;
+          status: string;
+          lineItems: Array<{ description: string; quantity: number; unitPrice: number; amount: number }>;
+          subtotal: number;
+          tax: number;
+          total: number;
+          notes?: string;
+        }>(`/api/invoices/admin/invoices/${invoiceId}`);
+
+        console.log("[PricingCalculator] Loading invoice:", invoice.invoiceNumber || invoiceId);
+
+        // Update form with invoice data
+        setForm(prev => {
+          if (!prev) return prev;
+
+          const updatedLines = { ...prev.lines };
+
+          // First, unselect all lines
+          Object.keys(updatedLines).forEach(lineId => {
+            updatedLines[lineId] = {
+              ...updatedLines[lineId],
+              selected: false,
+              quantity: 1,
+              overridePrice: null,
+              overrideDraft: "",
+            };
+          });
+
+          // Then, select and populate lines from invoice
+          invoice.lineItems.forEach(item => {
+            const matchingLine = metadata.lineItems.find(
+              line => line.service.trim().toLowerCase() === item.description.trim().toLowerCase()
+            );
+            
+            if (matchingLine) {
+              updatedLines[matchingLine.id] = {
+                ...updatedLines[matchingLine.id],
+                selected: true,
+                quantity: item.quantity,
+                overridePrice: item.unitPrice,
+                overrideDraft: String(item.unitPrice),
+              };
+            }
+          });
+
+          return {
+            ...prev,
+            lines: updatedLines,
+            quoteDetails: {
+              ...prev.quoteDetails,
+              notes: invoice.notes || "",
+              customInvoiceName: invoice.customName || "",
+            },
+          };
+        });
+
+        setSelectedInvoiceId(invoiceId);
+        setStatus(`Loaded invoice ${invoice.invoiceNumber || invoiceId}`);
+      } catch (error: any) {
+        console.error("[PricingCalculator] Failed to load invoice:", error);
+        setStatus(error?.data?.error || "Failed to load invoice");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [metadata, form]
+  );
+
+  const handleDeleteInvoice = useCallback(
+    async (invoiceId: string) => {
+      if (!confirm("Are you sure you want to delete this invoice?")) return;
+      
+      try {
+        await http.del(`/api/invoices/admin/invoices/${invoiceId}`);
+        
+        // If the deleted invoice was selected, clear selection
+        if (selectedInvoiceId === invoiceId) {
+          setSelectedInvoiceId("");
+        }
+        
+        // Refresh invoice list
+        const invoices = await http.get<Array<{
+          _id: string;
+          invoiceNumber: string;
+          customName?: string;
+          status: string;
+          total: number;
+          createdAt: string;
+          billingMonth: string;
+        }>>(`/api/invoices/admin/invoices?userId=${selectedUserId}`);
+        setUserInvoices(invoices);
+        
+        setStatus("Invoice deleted");
+      } catch (error: any) {
+        console.error("[PricingCalculator] Failed to delete invoice:", error);
+        setStatus(error?.data?.error || "Failed to delete invoice");
+      }
+    },
+    [selectedInvoiceId, selectedUserId]
+  );
+
+  const handleCopyInvoice = useCallback(
+    async (invoiceId: string) => {
+      try {
+        const invoice = await http.get<{
+          _id: string;
+          userId: string;
+          userEmail: string;
+          invoiceNumber: string;
+          customName?: string;
+          status: string;
+          lineItems: Array<{ description: string; quantity: number; unitPrice: number; amount: number }>;
+          subtotal: number;
+          tax: number;
+          total: number;
+          notes?: string;
+          billingMonth: string;
+        }>(`/api/invoices/admin/invoices/${invoiceId}`);
+
+        // Create a copy with "(Copy)" appended to name
+        const copyPayload = {
+          userId: invoice.userId,
+          userEmail: invoice.userEmail,
+          lineItems: invoice.lineItems,
+          subtotal: invoice.subtotal,
+          tax: invoice.tax,
+          total: invoice.total,
+          dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+          billingMonth: invoice.billingMonth,
+          notes: invoice.notes || "",
+          customName: `${invoice.customName || invoice.invoiceNumber} (Copy)`,
+          status: "admin-draft",
+        };
+
+        const createResponse = await http.post<{ success: boolean; invoice: { _id: string } }>(
+          "/api/invoices/admin/invoices",
+          copyPayload
+        );
+
+        // Refresh invoice list
+        const invoices = await http.get<Array<{
+          _id: string;
+          invoiceNumber: string;
+          customName?: string;
+          status: string;
+          total: number;
+          createdAt: string;
+          billingMonth: string;
+        }>>(`/api/invoices/admin/invoices?userId=${selectedUserId}`);
+        setUserInvoices(invoices);
+
+        // Load the copied invoice
+        handleLoadInvoice(createResponse.invoice._id);
+        setStatus("Invoice copied");
+      } catch (error: any) {
+        console.error("[PricingCalculator] Failed to copy invoice:", error);
+        setStatus(error?.data?.error || "Failed to copy invoice");
+      }
+    },
+    [selectedUserId, handleLoadInvoice]
+  );
+
+
   const handleWorkbookWizardSubmit = useCallback(
     async (
       nextMapping: PricingWorkbookMapping,
@@ -424,19 +916,7 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
           payload
         );
 
-        setMapping(response.mapping);
-        if (response.workbook) {
-          setWorkbookInfo(response.workbook);
-          setBlueprint(response.workbook.blueprint ?? null);
-          setBlueprintOverrides(response.workbook.blueprintOverrides ?? null);
-          setMergedBlueprint(
-            response.workbook.blueprintMerged ?? response.workbook.blueprint ?? null
-          );
-        }
-        if (response.settings) {
-          setSettings(response.settings);
-          setEmailRecipient((response.settings.exportedEmailRecipients || []).join(", "));
-        }
+        applyWorkbookResponse(response);
 
         if (overridesPayload !== undefined) {
           const overridesResponse = await http.put<PricingBlueprintUpdateResponse>(
@@ -464,7 +944,39 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
         setStatus(error?.data?.error || "Failed to save workbook mapping. Please try again.");
       }
     },
-    [loadBootstrap]
+    [applyWorkbookResponse, loadBootstrap]
+  );
+
+  const handleWorkbookUploadDuringWizard = useCallback(
+    async (nextMapping: PricingWorkbookMapping, workbookPayload: PricingWorkbookUploadPayload) => {
+      setStatus(null);
+      try {
+        // On first upload, send ONLY the workbook binary - no mapping required
+        // AI will analyze entire workbook structure automatically
+        // Mapping is only for manual fine-tuning after AI analysis
+        const response = await http.put<PricingWorkbookUpdateResponse>(
+          "/api/pricing/workbook",
+          {
+            workbook: workbookPayload,
+            // workbookMapping: NOT SENT - AI figures it out
+          }
+        );
+
+        applyWorkbookResponse(response);
+
+        setStatus(
+          response.analysisError
+            ? `Workbook uploaded. AI analysis reported: ${response.analysisError}`
+            : "Workbook uploaded and AI analysis completed."
+        );
+      } catch (error: any) {
+        console.error("Failed to upload workbook during wizard", error);
+        const message = error?.data?.error || "Failed to upload workbook. Please try again.";
+        setStatus(message);
+        throw error;
+      }
+    },
+    [applyWorkbookResponse]
   );
 
   const handleBlueprintReanalyze = useCallback(async () => {
@@ -498,12 +1010,6 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
     }
   }, [loadBootstrap]);
 
-  useEffect(() => {
-    if (!mapping && wizardOpen) {
-      setWizardOpen(false);
-    }
-  }, [mapping, wizardOpen]);
-
   const mappingSummary = useMemo(() => {
     if (!mapping) return null;
 
@@ -513,7 +1019,6 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
       { key: "billing", label: "Billing" },
       { key: "unitPrice", label: "Unit Price" },
       { key: "lineTotal", label: "Line Total" },
-      { key: "maintenanceTotal", label: "Maintenance Total" },
     ];
 
     const quoteFields: Array<{
@@ -579,9 +1084,11 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
           <div className={styles.mappingSummaryTitle}>Totals</div>
           <div className={styles.mappingSummaryRow}>Monthly: {mapping.totals.monthlySubtotal}</div>
           <div className={styles.mappingSummaryRow}>One-time: {mapping.totals.oneTimeSubtotal}</div>
-          <div className={styles.mappingSummaryRow}>
-            Maintenance: {mapping.totals.maintenanceSubtotal}
-          </div>
+          {mapping.totals.maintenanceSubtotal ? (
+            <div className={styles.mappingSummaryRow}>
+              Maintenance: {mapping.totals.maintenanceSubtotal}
+            </div>
+          ) : null}
           <div className={styles.mappingSummaryRow}>Grand total: {mapping.totals.grandTotal}</div>
         </div>
         <div className={styles.mappingSummaryItem}>
@@ -656,13 +1163,10 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
 
   let content: JSX.Element;
 
-  if (loading) {
-    content = <div className={styles.emptyState}>Loading pricing calculator…</div>;
-  } else if (!metadata || !form || setupRequired) {
-    const emptyMessage =
-      status ||
-      "No workbook found. Upload the pricing workbook and configure the mapping to begin.";
-    const wizardDisabled = !mapping;
+  if (loading || !metadata || !form || setupRequired) {
+    const emptyMessage = loading
+      ? "Loading pricing calculator..."
+      : status || "Upload the pricing workbook and configure the mapping to begin.";
     content = (
       <section className={styles.pricingSection}>
         <div className={styles.sectionHeader}>
@@ -671,27 +1175,23 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
         </div>
         <div className={styles.emptyState}>
           <p>{emptyMessage}</p>
-          <div className={styles.emptyStateActions}>
-            <button
-              type="button"
-              className={styles.buttonPrimary}
-              onClick={() => setWizardOpen(true)}
-              disabled={wizardDisabled}
-            >
-              Upload new XLSX calculator file
-            </button>
-            <button
-              type="button"
-              className={styles.buttonGhost}
-              onClick={() => void loadBootstrap(true)}
-            >
-              Reload
-            </button>
-          </div>
-          {wizardDisabled && (
-            <p className={styles.emptyStateHint}>
-              Mapping details are still loading. Try reloading or refresh once the server is ready.
-            </p>
+          {!loading && (
+            <div className={styles.emptyStateActions}>
+              <button
+                type="button"
+                className={styles.buttonPrimary}
+                onClick={() => setWizardOpen(true)}
+              >
+                Upload new XLSX calculator file
+              </button>
+              <button
+                type="button"
+                className={styles.buttonGhost}
+                onClick={() => void loadBootstrap(true)}
+              >
+                Reload
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -704,6 +1204,7 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
           {status && <span className={styles.statusText}>{status}</span>}
         </div>
 
+        {/* Top Row: Client Size, Price Point, Client Selector */}
         <div className={styles.controlsRow}>
           <div className={styles.controlGroup}>
             <label htmlFor="clientSize">Client Size</label>
@@ -744,6 +1245,104 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
               ))}
             </select>
           </div>
+
+          <div className={styles.controlGroup}>
+            <label htmlFor="clientSelector">Select Client</label>
+            <select
+              id="clientSelector"
+              className={styles.selectInput}
+              value={selectedUserId}
+              onChange={(e) => {
+                setSelectedUserId(e.target.value);
+                setSelectedInvoiceId(""); // Reset invoice selection when client changes
+              }}
+            >
+              <option value="">-- New/Custom Quote --</option>
+              {users.map((user) => (
+                <option key={user._id} value={user._id}>
+                  {user.company || user.email}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Invoice Cards - Full width below client selector */}
+        {selectedUserId && userInvoices.length > 0 && (
+          <div className={styles.invoiceListContainer}>
+            <div className={styles.invoiceListScroll}>
+              <div
+                className={`${styles.newInvoiceCard} ${!selectedInvoiceId ? styles.selected : ''}`}
+                onClick={() => setSelectedInvoiceId("")}
+              >
+                + New Invoice
+              </div>
+              {userInvoices.map((invoice) => (
+                <div
+                  key={invoice._id}
+                  className={`${styles.invoiceCard} ${selectedInvoiceId === invoice._id ? styles.selected : ''}`}
+                  onClick={() => handleLoadInvoice(invoice._id)}
+                >
+                  <div className={styles.invoiceCardName}>
+                    {invoice.customName || invoice.invoiceNumber || `Draft ${invoice._id.slice(-6)}`}
+                  </div>
+                  <div className={styles.invoiceCardMeta}>
+                    <span>{invoice.status.toUpperCase().replace("-", " ")}</span>
+                    <span>${invoice.total.toFixed(2)}</span>
+                    <span>{new Date(invoice.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className={styles.invoiceCardActions}>
+                    <button
+                      className={styles.invoiceActionBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyInvoice(invoice._id);
+                      }}
+                    >
+                      Copy
+                    </button>
+                    <button
+                      className={`${styles.invoiceActionBtn} ${styles.danger}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteInvoice(invoice._id);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Quote Details Row */}
+        <div className={styles.controlsRow}>
+          {selectedUserId && (
+            <div className={styles.controlGroup}>
+              <label htmlFor="customInvoiceName">Invoice Name (Optional)</label>
+              <input
+                id="customInvoiceName"
+                className={styles.textInput}
+                placeholder="e.g., Q4 2025 Services"
+                value={form.quoteDetails.customInvoiceName || ""}
+                onChange={(event) =>
+                  setForm((previous) =>
+                    previous
+                      ? {
+                          ...previous,
+                          quoteDetails: {
+                            ...previous.quoteDetails,
+                            customInvoiceName: event.target.value,
+                          },
+                        }
+                      : previous
+                  )
+                }
+              />
+            </div>
+          )}
 
           <div className={styles.controlGroup}>
             <label htmlFor="clientName">Client Name</label>
@@ -853,23 +1452,30 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
 
         {mapping && (
           <div className={styles.mappingCard}>
-            <div className={styles.mappingHeader}>
-              <div>
-                <h4>Workbook Mapping</h4>
-                <p className={styles.mappingHint}>
-                  Review the current configuration, then open the wizard to update sheets, cells, and
-                  ranges with a live preview.
-                </p>
+            <div 
+              className={styles.mappingHeader}
+              onClick={() => setMappingExpanded(!mappingExpanded)}
+            >
+              <div className={styles.mappingHeaderLeft}>
+                <span className={`${styles.mappingToggleIcon} ${mappingExpanded ? styles.open : ''}`}>
+                  ▶
+                </span>
+                <h4>Workbook Configuration</h4>
               </div>
               <button
                 type="button"
                 className={styles.buttonPrimary}
-                onClick={() => setWizardOpen(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setWizardOpen(true);
+                }}
               >
-                Upload new XLSX calculator file
+                Edit Mapping
               </button>
             </div>
-            {mappingSummary}
+            <div className={`${styles.mappingContent} ${mappingExpanded ? styles.open : ''}`}>
+              {mappingSummary}
+            </div>
           </div>
         )}
 
@@ -888,7 +1494,7 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
                   <th className={styles.lineServiceCell}>Service</th>
                   <th>Billing</th>
                   <th>Qty</th>
-                  <th>Maintenance</th>
+                  <th>Default</th>
                   <th>Override</th>
                   <th>Effective</th>
                   <th>Total</th>
@@ -923,18 +1529,9 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
                         />
                       </td>
                       <td>
-                        <label className={styles.maintenanceToggle}>
-                          <input
-                            type="checkbox"
-                            checked={state.includeMaintenance}
-                            onChange={(event) =>
-                              handleLineChange(line.id, {
-                                includeMaintenance: event.target.checked,
-                              })
-                            }
-                          />
-                          Include
-                        </label>
+                        {defaultPriceMap.has(line.id)
+                          ? formatCurrency(defaultPriceMap.get(line.id) ?? 0)
+                          : "—"}
                       </td>
                       <td>
                         <input
@@ -968,12 +1565,14 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
               {calculation ? formatCurrency(calculation.totals.oneTimeSubtotal) : "—"}
             </span>
           </div>
-          <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Maintenance</span>
-            <span className={styles.summaryValue}>
-              {calculation ? formatCurrency(calculation.totals.maintenanceSubtotal) : "—"}
-            </span>
-          </div>
+          {calculation?.totals.maintenanceSubtotal != null ? (
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>Maintenance</span>
+              <span className={styles.summaryValue}>
+                {formatCurrency(calculation.totals.maintenanceSubtotal)}
+              </span>
+            </div>
+          ) : null}
           <div className={styles.summaryItem}>
             <span className={styles.summaryLabel}>Grand Total (Month One)</span>
             <span className={styles.summaryValue}>
@@ -1027,6 +1626,40 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
           </button>
           {calculating && <span className={styles.statusText}>Recalculating…</span>}
         </div>
+
+        {/* Invoice Actions - Only shown when client is selected */}
+        {selectedUserId && (
+          <div className={styles.actionsRow} style={{ marginTop: "1rem", borderTop: "1px solid #333", paddingTop: "1rem" }}>
+            <button
+              type="button"
+              className={styles.buttonGhost}
+              onClick={() => handleSaveInvoiceDraft("admin-draft")}
+              disabled={saving || calculating || !calculation}
+              title="Save progress (admin only)"
+            >
+              {saving ? "Saving…" : "💾 Save Progress"}
+            </button>
+            <button
+              type="button"
+              className={styles.buttonPrimary}
+              onClick={() => handleSaveInvoiceDraft("pending-approval")}
+              disabled={saving || calculating || !calculation}
+              title="Send to client for approval"
+            >
+              {saving ? "Sending…" : "📤 Send for Approval"}
+            </button>
+            <button
+              type="button"
+              className={styles.buttonPrimary}
+              onClick={() => handleSaveInvoiceDraft("sent")}
+              disabled={saving || calculating || !calculation}
+              title="Publish invoice immediately"
+              style={{ backgroundColor: "#2a7f3e" }}
+            >
+              {saving ? "Publishing…" : "✅ Publish Invoice"}
+            </button>
+          </div>
+        )}
       </section>
     );
   }
@@ -1034,15 +1667,16 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
   return (
     <>
       {content}
-      {mapping && (
+      {wizardOpen && (
         <WorkbookMappingWizard
           isOpen={wizardOpen}
-          mapping={mapping}
+          mapping={mapping ?? createEmptyWorkbookMapping()}
           blueprint={blueprint}
           mergedBlueprint={mergedBlueprint}
           overrides={blueprintOverrides}
           onClose={() => setWizardOpen(false)}
           onSubmit={handleWorkbookWizardSubmit}
+          onUploadWorkbook={handleWorkbookUploadDuringWizard}
           onRequestReanalyze={handleBlueprintReanalyze}
         />
       )}

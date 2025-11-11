@@ -1,12 +1,14 @@
 import type { PricingRateOverride } from "../models/PricingSettings";
 
-export type PricingClientSegment = "Solo/Startup" | "Small Business" | "Mid-Market" | string;
+export type PricingClientSegment = string; // Flexible: "Solo/Startup" | "Small Business" | "Enterprise" | etc.
 
-export interface PricingRateBand {
-  low?: number | null;
-  high?: number | null;
-  maintenance?: number | null;
-}
+export type PricingChargeType = "recurring" | "one-time";
+
+// Flexible rate structure - AI discovers the actual price point names in the workbook
+// Could be: { low: 100, high: 200, maintenance: 50 }
+// Or: { bronze: 100, silver: 200, gold: 300 }
+// Or: { startup: 100, growth: 200, enterprise: 300 }
+export type PricingRateBand = Record<string, number | null>;
 
 export interface PricingServiceComponent {
   id: string;
@@ -20,12 +22,12 @@ export interface PricingServiceBlueprint {
   sourceRow?: number;
   tier?: string;
   name: string;
-  billingCadence: string;
+  billingCadence: string; // Descriptive label: "Monthly", "Project", "Session", "One-time", etc.
+  chargeType: PricingChargeType; // True timing: recurring | one-time | setup
   description?: string;
   defaultSelected?: boolean;
   defaultQuantity?: number;
-  defaultMaintenance?: boolean;
-  rateBands: Partial<Record<PricingClientSegment, PricingRateBand>>;
+  rateBands: Partial<Record<PricingClientSegment, PricingRateBand>>; // Now supports ANY price point names
   estimatedEffortNotes?: string;
   components?: PricingServiceComponent[];
   tags?: string[];
@@ -48,6 +50,19 @@ export interface PricingBlueprintMetadata {
   generatedAt: string;
   generatedBy?: string;
   notes?: string;
+  columnMapping?: {
+    select?: string;         // Column containing checkbox/selection (e.g., "A")
+    quantity?: string;        // Column containing quantity input (e.g., "B")
+    tier?: string;           // Column containing tier/category (e.g., "D")
+    service?: string;        // Column containing service name (e.g., "E")
+    billing?: string;        // Column containing billing cadence (e.g., "F")
+    unitPrice?: string;      // Column containing calculated unit price (e.g., "N")
+    lineTotal?: string;      // Column containing calculated line total (e.g., "O")
+    type?: string;           // Column containing type/category (e.g., "T")
+  };
+  headerRow?: number;        // Row number containing column headers
+  dataStartRow?: number;     // First row of actual service data
+  dataEndRow?: number;       // Last row of actual service data
 }
 
 export interface PricingBlueprint {
@@ -67,7 +82,6 @@ export interface PricingServiceBlueprintOverride {
   description?: string;
   defaultSelected?: boolean;
   defaultQuantity?: number;
-  defaultMaintenance?: boolean;
   rateBands?: Partial<Record<PricingClientSegment, PricingRateBand>>;
   estimatedEffortNotes?: string;
   tags?: string[];

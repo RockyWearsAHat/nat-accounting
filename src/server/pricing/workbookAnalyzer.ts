@@ -8,6 +8,7 @@ import type {
 interface ExtractWorkbookOptions {
   maxRows?: number;
   maxColumns?: number;
+  sheetNames?: string[];
 }
 
 const DEFAULT_MAX_ROWS = 250;
@@ -96,12 +97,17 @@ export function extractWorkbookSnapshot(
   workbook: WorkBook,
   options: ExtractWorkbookOptions = {}
 ): PricingWorkbookSnapshot {
-  const safeOptions: Required<ExtractWorkbookOptions> = {
+  const safeOptions: Required<Omit<ExtractWorkbookOptions, "sheetNames">> = {
     maxRows: options.maxRows ?? DEFAULT_MAX_ROWS,
     maxColumns: options.maxColumns ?? DEFAULT_MAX_COLUMNS,
   };
 
-  const sheets: PricingWorksheetSnapshot[] = workbook.SheetNames.map((sheetName) => {
+  const requestedSheets = options.sheetNames?.filter(Boolean).map((name) => name.trim());
+  const sheetNames = requestedSheets && requestedSheets.length
+    ? requestedSheets.filter((name) => workbook.SheetNames.includes(name))
+    : workbook.SheetNames;
+
+  const sheets: PricingWorksheetSnapshot[] = sheetNames.map((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
     return readSheetSnapshot(sheetName, sheet, safeOptions);
   });

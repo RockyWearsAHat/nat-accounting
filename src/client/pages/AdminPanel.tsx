@@ -6,6 +6,8 @@ import { ScheduleAppointmentModal } from '../components/ScheduleAppointmentModal
 import { MeetingsSection } from '../components/MeetingsSection';
 import { CalendarEventsProvider } from '../contexts/CalendarEventsContext';
 import PricingCalculatorAdmin from '../components/PricingCalculatorAdmin';
+import { AdminDocumentsSection } from '../components/AdminDocumentsSection';
+import SubscriptionManager from '../components/SubscriptionManager';
 
 interface User { email:string; role:string; }
 interface CalendarConfig { calendars:any[]; whitelist:string[]; busyEvents?:string[]; colors?:Record<string,string>; }
@@ -48,6 +50,7 @@ const CalendarSettings: React.FC<{ config:CalendarConfig|null; onBusyToggle:(url
 
 // Main Admin Panel ------------------------------------------------
 export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, onLogout }) => {
+  const [activeTab, setActiveTab] = useState<"calendar" | "meetings" | "documents" | "pricing" | "settings">("calendar");
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   // Initialize config with cached data immediately
   const [config,setConfig] = useState<CalendarConfig|null>(() => {
@@ -197,88 +200,159 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
         <h2>Admin Dashboard</h2>
         <button onClick={onLogout} className={styles.btnSecondary}>Logout</button>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
-        <button className={styles.btnPrimary} onClick={() => setShowScheduleModal(true)}>
-          + Schedule Appointment
+
+      {/* Tab Navigation */}
+      <div className={styles.tabs}>
+        <button
+          className={`${styles.tab} ${activeTab === "calendar" ? styles.tabActive : ""}`}
+          onClick={() => setActiveTab("calendar")}
+        >
+          Calendar
+        </button>
+        <button
+          className={`${styles.tab} ${activeTab === "meetings" ? styles.tabActive : ""}`}
+          onClick={() => setActiveTab("meetings")}
+        >
+          Meetings
+        </button>
+        <button
+          className={`${styles.tab} ${activeTab === "documents" ? styles.tabActive : ""}`}
+          onClick={() => setActiveTab("documents")}
+        >
+          Documents
+        </button>
+        <button
+          className={`${styles.tab} ${activeTab === "pricing" ? styles.tabActive : ""}`}
+          onClick={() => setActiveTab("pricing")}
+        >
+          Pricing
+        </button>
+        <button
+          className={`${styles.tab} ${activeTab === "settings" ? styles.tabActive : ""}`}
+          onClick={() => setActiveTab("settings")}
+        >
+          Settings
         </button>
       </div>
-      <ScheduleAppointmentModal
-        open={showScheduleModal}
-        onClose={() => setShowScheduleModal(false)}
-        onScheduled={() => {
-          loadConfig();
-          setShowScheduleModal(false);
-          // Also trigger calendar refresh if possible
-          if (window.dispatchEvent) {
-            window.dispatchEvent(new CustomEvent('calendar-refresh'));
-          }
-        }}
-      />
-      <CalendarEventsProvider>
-        <MeetingsSection onMeetingUpdate={() => {
-          loadConfig();
-          // Refresh calendar if possible
-          if (window.dispatchEvent) {
-            window.dispatchEvent(new CustomEvent('calendar-refresh'));
-          }
-        }} />
-        
-        <div className={styles.sectionCard}>
-          <h4>Calendar Display</h4>
 
-        </div>
-        
-        <div className={styles.calendarWrapper}>
-          <WeeklyCalendar 
-            config={config} 
-            hours={hours} 
-            onConfigRefresh={loadConfig}
-            onConsultationUpdate={() => {}} // No consultations in admin panel
-          />
-        </div>
-        <PricingCalculatorAdmin />
-      </CalendarEventsProvider>
-      <div className={styles.sectionCard}>
-        <h4>Google Calendar Integration</h4>
-        {googleStatus?.connected ? (
-          (() => {
-            const expired = googleStatus.expires && new Date(googleStatus.expires).getTime() < Date.now();
-            if (expired) {
-              return (
-                <>
-                  <p className={styles.mutedSmall}>
-                    Token expired ({googleStatus.expires && new Date(googleStatus.expires).toLocaleString()}).
-                  </p>
-                  <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.btnPrimary}>
-                    {connectingGoogle ? 'Redirecting…' : 'Reauthorize Google Calendar'}
-                  </button>
-                </>
-              );
-            }
-            return (
-              <>
-                <p className={styles.mutedSmall}>Connected. Tokens stored for admin user{googleStatus.expires && ` (exp: ${new Date(googleStatus.expires).toLocaleString()})`}.</p>
-                <button onClick={loadConfig} className={styles.btnSecondary}>Reload Google Calendars</button>
-              </>
-            );
-          })()
-        ) : (
-          <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.navButton}>{connectingGoogle? 'Redirecting…':'Connect Google Calendar'}</button>
+      {/* Tab Content */}
+      <div className={styles.content}>
+        {/* Calendar Tab */}
+        {activeTab === "calendar" && (
+          <div className={styles.tabContent}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+              <button className={styles.btnPrimary} onClick={() => setShowScheduleModal(true)}>
+                + Schedule Appointment
+              </button>
+            </div>
+            <ScheduleAppointmentModal
+              open={showScheduleModal}
+              onClose={() => setShowScheduleModal(false)}
+              onScheduled={() => {
+                loadConfig();
+                setShowScheduleModal(false);
+                // Also trigger calendar refresh if possible
+                if (window.dispatchEvent) {
+                  window.dispatchEvent(new CustomEvent('calendar-refresh'));
+                }
+              }}
+            />
+            <CalendarEventsProvider>
+              <div className={styles.sectionCard}>
+                <h4>Calendar Display</h4>
+              </div>
+              
+              <div className={styles.calendarWrapper}>
+                <WeeklyCalendar 
+                  config={config} 
+                  hours={hours} 
+                  onConfigRefresh={loadConfig}
+                  onConsultationUpdate={() => {}} // No consultations in admin panel
+                />
+              </div>
+            </CalendarEventsProvider>
+          </div>
         )}
-      </div>
-      <div className={styles.siteSettings}>
-        <h3>Site Settings</h3>
-        {settings && availableTimezones.length>0 && (
-          <div className={styles.timezoneRow}>
-            <label>Timezone</label>
-            <select value={settings.timezone} onChange={e=> http.post<any>('/api/settings',{ timezone:e.target.value}).then(r=> setSettings(r.settings))}>
-              {availableTimezones.map(t=> <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <span className={styles.mutedSmall}>Events display in this timezone.</span>
+
+        {/* Meetings Tab */}
+        {activeTab === "meetings" && (
+          <div className={styles.tabContent}>
+            <CalendarEventsProvider>
+              <MeetingsSection onMeetingUpdate={() => {
+                loadConfig();
+                // Refresh calendar if possible
+                if (window.dispatchEvent) {
+                  window.dispatchEvent(new CustomEvent('calendar-refresh'));
+                }
+              }} />
+            </CalendarEventsProvider>
+          </div>
+        )}
+
+        {/* Documents Tab */}
+        {activeTab === "documents" && (
+          <div className={styles.tabContent}>
+            <AdminDocumentsSection />
+          </div>
+        )}
+
+        {/* Pricing Tab */}
+        {activeTab === "pricing" && (
+          <div className={styles.tabContent}>
+            <PricingCalculatorAdmin />
+            <div style={{ marginTop: "3rem", borderTop: "2px solid #333", paddingTop: "2rem" }}>
+              <SubscriptionManager />
+            </div>
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === "settings" && (
+          <div className={styles.tabContent}>
+            <div className={styles.sectionCard}>
+              <h4>Google Calendar Integration</h4>
+              {googleStatus?.connected ? (
+                (() => {
+                  const expired = googleStatus.expires && new Date(googleStatus.expires).getTime() < Date.now();
+                  if (expired) {
+                    return (
+                      <>
+                        <p className={styles.mutedSmall}>
+                          Token expired ({googleStatus.expires && new Date(googleStatus.expires).toLocaleString()}).
+                        </p>
+                        <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.btnPrimary}>
+                          {connectingGoogle ? 'Redirecting…' : 'Reauthorize Google Calendar'}
+                        </button>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <p className={styles.mutedSmall}>Connected. Tokens stored for admin user{googleStatus.expires && ` (exp: ${new Date(googleStatus.expires).toLocaleString()})`}.</p>
+                      <button onClick={loadConfig} className={styles.btnSecondary}>Reload Google Calendars</button>
+                    </>
+                  );
+                })()
+              ) : (
+                <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.navButton}>{connectingGoogle? 'Redirecting…':'Connect Google Calendar'}</button>
+              )}
+            </div>
+            <div className={styles.siteSettings}>
+              <h3>Site Settings</h3>
+              {settings && availableTimezones.length>0 && (
+                <div className={styles.timezoneRow}>
+                  <label>Timezone</label>
+                  <select value={settings.timezone} onChange={e=> http.post<any>('/api/settings',{ timezone:e.target.value}).then(r=> setSettings(r.settings))}>
+                    {availableTimezones.map(t=> <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                  <span className={styles.mutedSmall}>Events display in this timezone.</span>
+                </div>
+              )}
+            </div>
+            <CalendarSettings config={config} onBusyToggle={toggleCalendarBusy} onColor={updateCalendarColor} />
           </div>
         )}
       </div>
-      <CalendarSettings config={config} onBusyToggle={toggleCalendarBusy} onColor={updateCalendarColor} />
     </div>
   );
 };
