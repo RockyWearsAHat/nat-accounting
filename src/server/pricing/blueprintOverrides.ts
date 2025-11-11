@@ -58,9 +58,6 @@ function sanitizeServiceOverride(
   if (override.defaultSelected != null) {
     cleaned.defaultSelected = Boolean(override.defaultSelected);
   }
-  if (override.defaultMaintenance != null) {
-    cleaned.defaultMaintenance = Boolean(override.defaultMaintenance);
-  }
   if (override.defaultQuantity != null && Number.isFinite(Number(override.defaultQuantity))) {
     cleaned.defaultQuantity = Number(override.defaultQuantity);
   }
@@ -118,9 +115,6 @@ function applyServiceOverride(
   }
   if (override.defaultQuantity != null) {
     next.defaultQuantity = override.defaultQuantity;
-  }
-  if (override.defaultMaintenance != null) {
-    next.defaultMaintenance = override.defaultMaintenance;
   }
 
   if (override.rateBands && Object.keys(override.rateBands).length) {

@@ -11,7 +11,7 @@ import {
 	mapServicesByRow,
 	mergeBlueprintWithOverrides,
 } from "./blueprintOverrides";
-import type { PricingBlueprint } from "./blueprint";
+import type { PricingBlueprint, PricingServiceBlueprint } from "./blueprint";
 
 export type ClientSize = "Solo/Startup" | "Small Business" | "Mid-Market";
 export type PricePoint = "Low" | "Midpoint" | "High";
@@ -30,21 +30,20 @@ export interface PricingLineMetadata {
 	billing: string;
 	description?: string;
 	type: "Monthly" | "One-time/Non-monthly" | string;
+	chargeType: "recurring" | "one-time"; // Source of truth for subtotal calculation
 	defaultSelected: boolean;
 	defaultQuantity: number;
-	defaultMaintenance: boolean;
 	baseRates: PricingRateOverride;
-	maintenanceAmount?: number | null;
-	cellRefs: {
+	cellRefs?: {
 		select: string;
 		quantity: string;
-		maintenance: string;
 		unitPrice: string;
 		lineTotal: string;
-		maintenanceTotal?: string;
 		type: string;
 	};
 	rateColumns: PricingRateColumns;
+	// AI Blueprint flexible rate structure (for pricing tables)
+	rateBands?: Record<string, Record<string, number>>;
 }
 
 export interface PricingMetadata {
@@ -54,7 +53,7 @@ export interface PricingMetadata {
 	totals: {
 		monthlySubtotal: string;
 		oneTimeSubtotal: string;
-		maintenanceSubtotal: string;
+		maintenanceSubtotal?: string;
 		grandTotal: string;
 		ongoingMonthly?: string;
 	};
@@ -67,7 +66,6 @@ export interface PricingLineSelection {
 	lineId: string;
 	selected?: boolean;
 	quantity?: number;
-	includeMaintenance?: boolean;
 	overridePrice?: number | null;
 	rateOverrides?: PricingRateOverride;
 }
@@ -94,21 +92,19 @@ export interface PricingLineResult {
 	billing: string;
 	selected: boolean;
 	quantity: number;
-	includeMaintenance: boolean;
 	unitPrice: number;
 	overridePrice?: number | null;
 	effectiveUnitPrice: number;
 	lineTotal: number;
-	maintenanceAmount: number;
 	type: string;
 }
 
 export interface PricingTotals {
 	monthlySubtotal: number;
 	oneTimeSubtotal: number;
-	maintenanceSubtotal: number;
 	grandTotalMonthOne: number;
 	ongoingMonthly: number;
+	maintenanceSubtotal?: number;
 }
 
 export interface PricingCalculationResult {
@@ -139,41 +135,51 @@ const CLIENT_SIZE_OPTIONS: ClientSize[] = [
 const PRICE_POINT_OPTIONS: PricePoint[] = ["Low", "Midpoint", "High"];
 
 async function loadWorkbookBinaryFromStore(): Promise<WorkbookBinary> {
-	const doc = await PricingWorkbookModel.findOne()
-		.sort({ uploadedAt: -1 })
-		.lean<
-			| {
-				filename: string;
-				mimeType?: string;
-				data: Buffer;
-				size?: number;
-				uploadedAt?: Date;
-				uploadedBy?: string;
-			}
-			| null
-		>();
+	// Don't use .lean() - let Mongoose handle Binary conversion
+	const doc = await PricingWorkbookModel.findOne().sort({ uploadedAt: -1 });
 
-	if (doc?.data) {
-		const buffer = Buffer.isBuffer(doc.data)
-			? Buffer.from(doc.data)
-			: Buffer.from(doc.data as unknown as ArrayBuffer);
-		if (buffer.length) {
-			return {
-				buffer,
-				updatedAt: doc.uploadedAt ? doc.uploadedAt.getTime() : Date.now(),
-				filename: doc.filename || "pricing-workbook.xlsx",
-				mimeType: doc.mimeType || DEFAULT_WORKBOOK_MIME,
-			};
-		}
-
-		console.warn(
-			"[pricing] Stored workbook document exists but contains no data. Upload a new workbook to enable the calculator."
+	if (!doc) {
+		throw new Error(
+			"Pricing workbook not found. Upload a workbook through the admin panel."
 		);
 	}
 
-	throw new Error(
-		"Pricing workbook not found. Upload a workbook through the admin panel."
+	console.log("[pricing] Document retrieved:", {
+		hasDoc: !!doc,
+		filename: doc.filename,
+		hasData: !!doc.data,
+		dataIsBuffer: Buffer.isBuffer(doc.data),
+		dataLength: doc.data ? (Buffer.isBuffer(doc.data) ? doc.data.length : "not a buffer") : 0,
+	});
+
+	if (!doc.data || !Buffer.isBuffer(doc.data)) {
+		console.warn(
+			"[pricing] Stored workbook document exists but data field is not a valid Buffer."
+		);
+		throw new Error(
+			"Pricing workbook data is corrupted. Upload a new workbook through the admin panel."
+		);
+	}
+
+	const buffer = Buffer.from(doc.data);
+
+	if (buffer.length === 0) {
+		console.warn("[pricing] Buffer length is zero after conversion.");
+		throw new Error(
+			"Pricing workbook data is empty. Upload a new workbook through the admin panel."
+		);
+	}
+
+	console.log(
+		`[pricing] Successfully loaded workbook binary: ${buffer.length} bytes, filename: ${doc.filename}`
 	);
+
+	return {
+		buffer,
+		updatedAt: doc.uploadedAt ? doc.uploadedAt.getTime() : Date.now(),
+		filename: doc.filename || "pricing-workbook.xlsx",
+		mimeType: doc.mimeType || DEFAULT_WORKBOOK_MIME,
+	};
 }
 
 async function getWorkbookBinary(forceReload = false): Promise<WorkbookBinary> {
@@ -273,9 +279,6 @@ function extractLineItems(
 		return makeCell(column, row);
 	};
 
-	const optionalCell = (column: string | undefined, row: number): string | null =>
-		column ? makeCell(column, row) : null;
-
 	for (let row = startRow; row <= endRow; row++) {
 		const tier = readString(sheet, getCell(columns.tier, row));
 		const service = readString(sheet, getCell(columns.service, row));
@@ -299,13 +302,17 @@ function extractLineItems(
 
 		const selectCell = getCell(columns.select, row);
 		const quantityCell = getCell(columns.quantity, row);
-		const maintenanceCell = getCell(columns.maintenanceToggle, row);
 		const unitPriceCell = getCell(columns.unitPrice, row);
 		const lineTotalCell = getCell(columns.lineTotal, row);
-		const maintenanceTotalCell = optionalCell(columns.maintenanceTotal, row);
 		const typeCell = getCell(columns.type, row);
 
 		const defaultQuantityValue = ensureNumber(readNumber(sheet, quantityCell), 1) || 1;
+
+		// Derive chargeType from type field (for legacy compatibility)
+		const chargeType: "recurring" | "one-time" =
+			type && /monthly/i.test(type) && !type.toLowerCase().includes("non-monthly")
+				? "recurring"
+				: "one-time";
 
 		const item: PricingLineMetadata = {
 			id,
@@ -315,9 +322,9 @@ function extractLineItems(
 			billing,
 			description,
 			type: type || "Monthly",
+			chargeType,
 			defaultSelected: readBoolean(sheet, selectCell, false),
 			defaultQuantity: defaultQuantityValue,
-			defaultMaintenance: readBoolean(sheet, maintenanceCell, false),
 			baseRates: {
 				soloStartup: {
 					low:
@@ -330,11 +337,11 @@ function extractLineItems(
 						) || undefined,
 					maintenance: columns.rateColumns.soloStartup.maintenance
 						? ensureNumber(
-								readNumber(
-									sheet,
-									getCell(columns.rateColumns.soloStartup.maintenance, row)
-								)
-							) || undefined
+							readNumber(
+								sheet,
+								getCell(columns.rateColumns.soloStartup.maintenance, row)
+							)
+						) || undefined
 						: undefined,
 				},
 				smallBusiness: {
@@ -348,11 +355,11 @@ function extractLineItems(
 						) || undefined,
 					maintenance: columns.rateColumns.smallBusiness.maintenance
 						? ensureNumber(
-								readNumber(
-									sheet,
-									getCell(columns.rateColumns.smallBusiness.maintenance, row)
-								)
-							) || undefined
+							readNumber(
+								sheet,
+								getCell(columns.rateColumns.smallBusiness.maintenance, row)
+							)
+						) || undefined
 						: undefined,
 				},
 				midMarket: {
@@ -366,24 +373,19 @@ function extractLineItems(
 						) || undefined,
 					maintenance: columns.rateColumns.midMarket.maintenance
 						? ensureNumber(
-								readNumber(
-									sheet,
-									getCell(columns.rateColumns.midMarket.maintenance, row)
-								)
-							) || undefined
+							readNumber(
+								sheet,
+								getCell(columns.rateColumns.midMarket.maintenance, row)
+							)
+						) || undefined
 						: undefined,
 				},
 			},
-			maintenanceAmount: maintenanceTotalCell
-				? readNumber(sheet, maintenanceTotalCell) || null
-				: null,
 			cellRefs: {
 				select: selectCell,
 				quantity: quantityCell,
-				maintenance: maintenanceCell,
 				unitPrice: unitPriceCell,
 				lineTotal: lineTotalCell,
-				maintenanceTotal: maintenanceTotalCell ?? undefined,
 				type: typeCell,
 			},
 			rateColumns: {
@@ -417,7 +419,14 @@ function extractLineItems(
 	return items;
 }
 
-function cloneRateOverride(source: PricingRateOverride): PricingRateOverride {
+function cloneRateOverride(source: PricingRateOverride | undefined): PricingRateOverride {
+	if (!source) {
+		return {
+			soloStartup: undefined,
+			smallBusiness: undefined,
+			midMarket: undefined,
+		};
+	}
 	return {
 		soloStartup: source.soloStartup ? { ...source.soloStartup } : undefined,
 		smallBusiness: source.smallBusiness ? { ...source.smallBusiness } : undefined,
@@ -547,7 +556,6 @@ async function applyBlueprintOverridesToLineItems(
 		if (service.description) draft.description = service.description;
 		if (service.defaultSelected != null) draft.defaultSelected = service.defaultSelected;
 		if (service.defaultQuantity != null) draft.defaultQuantity = service.defaultQuantity;
-		if (service.defaultMaintenance != null) draft.defaultMaintenance = service.defaultMaintenance;
 
 		draft.baseRates = mergeRatesFromService(draft.baseRates, service);
 
@@ -570,14 +578,201 @@ export async function getPricingMetadata(
 		mappingKey !== metadataMappingKey;
 
 	if (shouldReload) {
-		const workbook = XLSX.read(binary.buffer, {
-			type: "buffer",
-			cellFormula: true,
-			cellHTML: false,
-			cellStyles: true,
-		});
-		const sheet = getSheet(workbook, mapping.calculatorSheet);
-		const lineItems = extractLineItems(sheet, mapping);
+		// Try to use AI blueprint first (if available)
+		const workbookDoc = await PricingWorkbookModel.findOne().sort({ uploadedAt: -1 });
+		let lineItems: PricingLineMetadata[] = [];
+
+		if (workbookDoc?.blueprint?.services && workbookDoc.blueprint.services.length > 0) {
+			console.log("[pricing] Using AI blueprint for metadata (", workbookDoc.blueprint.services.length, "services)");
+
+			// Convert AI blueprint services to line items
+			try {
+				// Check if this is a calculator sheet (with formulas) or pricing table (reference data only)
+				const columnMapping = workbookDoc.blueprint.metadata?.columnMapping;
+
+				if (!columnMapping) {
+					// No column mapping = pricing table (not calculator sheet)
+					// Convert AI blueprint directly to line items without Excel cell references
+					console.log("[pricing] No columnMapping found - treating as pricing table (not calculator sheet)");
+
+					lineItems = workbookDoc.blueprint.services.map((service: PricingServiceBlueprint, index: number) => {
+						// Generate consistent ID from service name or use fallback
+						const id = service.id || service.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `service-${index}`;
+
+						// NEW: Use chargeType from AI instead of manual detection
+						const chargeType = service.chargeType || 'recurring';
+						const type: "Monthly" | "One-time/Non-monthly" = chargeType === 'recurring' ? "Monthly" : "One-time/Non-monthly";
+
+						// Convert AI rateBands to legacy baseRates structure for frontend compatibility
+						const rateBands = service.rateBands || {};
+						const baseRates: any = {};
+						const rateColumns: any = {};
+
+						for (const [segment, pricePoints] of Object.entries(rateBands)) {
+							if (!pricePoints || typeof pricePoints !== 'object') continue;
+							const segmentLower = segment.toLowerCase();
+
+							// Map AI-discovered segments to legacy structure
+							let targetSegment: 'soloStartup' | 'smallBusiness' | 'midMarket' | null = null;
+							if (segmentLower.includes('solo') || segmentLower.includes('startup')) {
+								targetSegment = 'soloStartup';
+							} else if (segmentLower.includes('small')) {
+								targetSegment = 'smallBusiness';
+							} else if (segmentLower.includes('mid')) {
+								targetSegment = 'midMarket';
+							}
+
+							if (targetSegment) {
+								// Convert price points to baseRates format (lowercase keys: low, high)
+								const baseRatesForSegment: any = {};
+								const rateColumnsForSegment: any = {};
+
+								for (const [pricePointName, value] of Object.entries(pricePoints)) {
+									const keyLower = pricePointName.toLowerCase();
+									// baseRates expects numbers
+									baseRatesForSegment[keyLower] = value ?? undefined;
+									// rateColumns expects strings
+									rateColumnsForSegment[keyLower] = value != null ? String(value) : undefined;
+								}
+
+								baseRates[targetSegment] = baseRatesForSegment;
+								rateColumns[targetSegment] = rateColumnsForSegment;
+							}
+						}
+
+						return {
+							id, // CRITICAL: Must have ID for selection mapping to work
+							row: service.sourceRow || index + 1,
+							tier: service.tier || "",
+							service: service.name, // CRITICAL: Must be 'service' not 'name' to match interface
+							billing: service.billingCadence || "",
+							description: service.description || "",
+							type, // Required by PricingLineMetadata interface
+							chargeType, // Source of truth for subtotal calculation
+							defaultSelected: service.defaultSelected ?? false,
+							defaultQuantity: service.defaultQuantity ?? 1,
+							// Populated from AI rateBands for frontend compatibility
+							baseRates,
+							rateColumns,
+							// AI Blueprint flexible rate structure (for pricing tables)
+							rateBands: service.rateBands || {},
+						} as PricingLineMetadata;
+					});
+
+					console.log("[pricing] Converted", lineItems.length, "AI blueprint services to line items (pricing table mode)");
+					// Don't return early - continue to build full metadata object below
+				} else {
+					// Column mapping exists = calculator sheet with formulas
+					console.log("[pricing] columnMapping found - treating as calculator sheet");
+
+					// Validate critical columns are discovered
+					const missingColumns: string[] = [];
+					if (!columnMapping.unitPrice) missingColumns.push('unitPrice');
+					if (!columnMapping.lineTotal) missingColumns.push('lineTotal');
+					if (!columnMapping.quantity) missingColumns.push('quantity');
+
+					if (missingColumns.length > 0) {
+						throw new Error(
+							`AI failed to discover critical columns: ${missingColumns.join(', ')}. ` +
+							"Cannot calculate pricing without these columns. " +
+							"Please verify the workbook structure and re-run AI analysis."
+						);
+					}
+
+					const selectCol = columnMapping.select;
+					const quantityCol = columnMapping.quantity;
+					const unitPriceCol = columnMapping.unitPrice;
+					const lineTotalCol = columnMapping.lineTotal;
+					const typeCol = columnMapping.type;
+
+					lineItems = workbookDoc.blueprint.services.map((service: PricingServiceBlueprint, index: number) => {
+						const id = service.id || `service-${index}`;
+						const rateBands = service.rateBands || {};
+
+						// Create rate columns from AI-extracted rate bands (FLEXIBLE format)
+						const rateColumns: PricingRateColumns = {};
+						const baseRates: PricingRateOverride = {};
+
+						for (const [segment, pricePoints] of Object.entries(rateBands)) {
+							if (!pricePoints || typeof pricePoints !== 'object') continue;
+							const segmentLower = segment.toLowerCase();
+
+							// Map discovered segment to legacy structure (for backward compatibility)
+							// TODO: Remove this mapping when PricingSettings supports flexible segments
+							let targetSegment: 'soloStartup' | 'smallBusiness' | 'midMarket' | null = null;
+							if (segmentLower.includes('solo') || segmentLower.includes('startup')) {
+								targetSegment = 'soloStartup';
+							} else if (segmentLower.includes('small')) {
+								targetSegment = 'smallBusiness';
+							} else if (segmentLower.includes('mid')) {
+								targetSegment = 'midMarket';
+							}
+
+							if (targetSegment) {
+								// Extract ALL discovered price points (not just low/high/maintenance)
+								const rateColumnsForSegment: any = {};
+								const baseRatesForSegment: any = {};
+
+								for (const [pricePointName, value] of Object.entries(pricePoints)) {
+									// rateColumns expects strings
+									rateColumnsForSegment[pricePointName] = value != null ? String(value) : undefined;
+									// baseRates expects numbers
+									baseRatesForSegment[pricePointName] = value ?? undefined;
+								}
+
+								rateColumns[targetSegment] = rateColumnsForSegment;
+								baseRates[targetSegment] = baseRatesForSegment;
+							}
+						}
+
+						const rowNum = service.sourceRow ?? index + 10;
+
+						// NEW: Use chargeType from AI instead of manual detection
+						const chargeType = service.chargeType || 'recurring';
+						const type: "Monthly" | "One-time/Non-monthly" = chargeType === 'recurring' ? "Monthly" : "One-time/Non-monthly";
+
+						return {
+							id,
+							row: rowNum,
+							tier: service.tier || 'Uncategorized',
+							service: service.name,
+							billing: service.billingCadence || 'Monthly',
+							description: service.description || undefined,
+							type,
+							chargeType, // Source of truth for subtotal calculation
+							defaultSelected: service.defaultSelected ?? false,
+							defaultQuantity: service.defaultQuantity ?? 1,
+							baseRates,
+							rateColumns,
+							cellRefs: {
+								select: selectCol ? `${selectCol}${rowNum}` : undefined,
+								quantity: `${quantityCol}${rowNum}`, // Required
+								unitPrice: `${unitPriceCol}${rowNum}`, // Required
+								lineTotal: `${lineTotalCol}${rowNum}`, // Required
+								type: typeCol ? `${typeCol}${rowNum}` : undefined,
+							},
+						} as PricingLineMetadata;
+					});
+					console.log("[pricing] Successfully converted", lineItems.length, "services from AI blueprint (calculator mode)");
+				} // End else (calculator sheet mode)
+			} catch (error) {
+				console.error("[pricing] ERROR converting AI blueprint to line items:", error);
+				console.error("[pricing] Error stack:", error instanceof Error ? error.stack : 'No stack');
+				throw error; // Re-throw to surface the error
+			}
+		} else {
+			// Fallback: use deterministic parser with mapping
+			console.log("[pricing] No AI blueprint available, using deterministic parser");
+			const workbook = XLSX.read(binary.buffer, {
+				type: "buffer",
+				cellFormula: true,
+				cellHTML: false,
+				cellStyles: true,
+			});
+			const sheet = getSheet(workbook, mapping.calculatorSheet);
+			lineItems = extractLineItems(sheet, mapping);
+		}
+
 		metadataCache = {
 			clientSizes: CLIENT_SIZE_OPTIONS,
 			pricePoints: PRICE_POINT_OPTIONS,
@@ -660,10 +855,10 @@ function applyRateOverrides(
 		column?: { low?: string; high?: string; maintenance?: string };
 		values?: { low?: number; high?: number; maintenance?: number };
 	}> = [
-		{ column: columns.soloStartup, values: overrides.soloStartup },
-		{ column: columns.smallBusiness, values: overrides.smallBusiness },
-		{ column: columns.midMarket, values: overrides.midMarket },
-	];
+			{ column: columns.soloStartup, values: overrides.soloStartup },
+			{ column: columns.smallBusiness, values: overrides.smallBusiness },
+			{ column: columns.midMarket, values: overrides.midMarket },
+		];
 
 	for (const entry of map) {
 		if (!entry.column || !entry.values) continue;
@@ -708,73 +903,165 @@ function removeFormulaAndWriteNumber(
 let calcFunctionsRegistered = false;
 
 function ensureCalcFunctionsRegistered() {
-	 if (calcFunctionsRegistered) return;
-	 try {
-	 	 const anchorArray = (...args: any[]) => {
-	 	 	 const [value] = args;
-	 	 	 if (Array.isArray(value)) return value;
-	 	 	 return value ?? null;
-	 	 };
+	if (calcFunctionsRegistered) return;
+	try {
+		const anchorArray = (...args: any[]) => {
+			const [value] = args;
+			if (Array.isArray(value)) return value;
+			return value ?? null;
+		};
 
-	 	 const filterFunction = (array: any, include: any, ifEmpty?: any) => {
-	 	 	 const toRows = (value: any): any[] => {
-	 	 	 	 if (!Array.isArray(value)) return [[value]];
-	 	 	 	 if (value.length === 0) return [];
-	 	 	 	 // Detect 2D arrays (rows)
-	 	 	 	 if (value.every((item: any) => Array.isArray(item))) {
-	 	 	 	 	 return value as any[];
-	 	 	 	 }
-	 	 	 	 // Treat 1D array as single column
-	 	 	 	 return (value as any[]).map((item) => [item]);
-	 	 	 };
+		const filterFunction = (array: any, include: any, ifEmpty?: any) => {
+			const toRows = (value: any): any[] => {
+				if (!Array.isArray(value)) return [[value]];
+				if (value.length === 0) return [];
+				// Detect 2D arrays (rows)
+				if (value.every((item: any) => Array.isArray(item))) {
+					return value as any[];
+				}
+				// Treat 1D array as single column
+				return (value as any[]).map((item) => [item]);
+			};
 
-	 	 	 const rows = toRows(array);
-	 	 	 if (rows.length === 0) return ifEmpty ?? [];
+			const rows = toRows(array);
+			if (rows.length === 0) return ifEmpty ?? [];
 
-	 	 	 const flattenIncludes = (value: any): boolean[] => {
-	 	 	 	 if (!Array.isArray(value)) return [Boolean(value)];
-	 	 	 	 const flattened: boolean[] = [];
-	 	 	 	 const walk = (val: any) => {
-	 	 	 	 	 if (Array.isArray(val)) {
-	 	 	 	 	 	 val.forEach(walk);
-	 	 	 	 	 } else {
-	 	 	 	 	 	 flattened.push(Boolean(val));
-	 	 	 	 	 }
-	 	 	 	 };
-	 	 	 	 walk(value);
-	 	 	 	 return flattened;
-	 	 	 };
+			const flattenIncludes = (value: any): boolean[] => {
+				if (!Array.isArray(value)) return [Boolean(value)];
+				const flattened: boolean[] = [];
+				const walk = (val: any) => {
+					if (Array.isArray(val)) {
+						val.forEach(walk);
+					} else {
+						flattened.push(Boolean(val));
+					}
+				};
+				walk(value);
+				return flattened;
+			};
 
-	 	 	 const includeFlags = flattenIncludes(include);
-	 	 	 const result = rows.filter((_, idx) => includeFlags[idx] ?? false);
+			const includeFlags = flattenIncludes(include);
+			const result = rows.filter((_, idx) => includeFlags[idx] ?? false);
 
-	 	 	 if (result.length === 0) {
-	 	 	 	 return ifEmpty ?? [];
-	 	 	 }
+			if (result.length === 0) {
+				return ifEmpty ?? [];
+			}
 
-	 	 	 // Return in original dimensionality
-	 	 	 const is2DOriginal = Array.isArray(array) && Array.isArray(array[0]);
-	 	 	 if (!is2DOriginal) {
-	 	 	 	 return result.map((row) => row[0]);
-	 	 	 }
-	 	 	 return result;
-	 	 };
-	 	 XLSX_CALC.import_functions(
-	 	 	 {
-	 	 	 	 ANCHORARRAY: anchorArray,
-	 	 	 	 "_xlfn.ANCHORARRAY": anchorArray,
-	 	 	 	 FILTER: filterFunction,
-	 	 	 	 "_xlfn.FILTER": filterFunction,
-	 	 	 	 "_xlws.FILTER": filterFunction,
-	 	 	 },
-	 	 	 { override: true }
-	 	 );
-	 } catch (error) {
-	 	 if (process.env.NODE_ENV !== "production") {
-	 	 	 console.warn("[pricing] Failed to register custom Excel functions", error);
-	 	 }
-	 }
-	 calcFunctionsRegistered = true;
+			// Return in original dimensionality
+			const is2DOriginal = Array.isArray(array) && Array.isArray(array[0]);
+			if (!is2DOriginal) {
+				return result.map((row) => row[0]);
+			}
+			return result;
+		};
+		XLSX_CALC.import_functions(
+			{
+				ANCHORARRAY: anchorArray,
+				"_xlfn.ANCHORARRAY": anchorArray,
+				FILTER: filterFunction,
+				"_xlfn.FILTER": filterFunction,
+				"_xlws.FILTER": filterFunction,
+			},
+			{ override: true }
+		);
+	} catch (error) {
+		if (process.env.NODE_ENV !== "production") {
+			console.warn("[pricing] Failed to register custom Excel functions", error);
+		}
+	}
+	calcFunctionsRegistered = true;
+}
+
+/**
+ * Intelligently calculate unit price from AI-discovered rate structure.
+ * Works with ANY workbook structure by using the AI blueprint's discovered segments and price points.
+ */
+function calculateUnitPriceFromRates(
+	line: PricingLineMetadata,
+	clientSize: ClientSize,
+	pricePoint: PricePoint
+): number {
+	// AI Blueprint Mode: Use rateBands (flexible, AI-discovered structure)
+	if (line.rateBands && Object.keys(line.rateBands).length > 0) {
+		// Find the rate band that matches the selected client size
+		// Use exact match first, then try case-insensitive match
+		let rateBand = line.rateBands[clientSize];
+
+		if (!rateBand) {
+			// Try case-insensitive match for flexibility
+			const clientSizeLower = clientSize.toLowerCase();
+			const matchingKey = Object.keys(line.rateBands).find(
+				key => key.toLowerCase() === clientSizeLower
+			);
+			if (matchingKey) {
+				rateBand = line.rateBands[matchingKey];
+			}
+		}
+
+		if (!rateBand) return 0;
+
+		// Find the price for the selected price point
+		// The AI discovers price point names (could be "Low"/"High", "Bronze"/"Gold", "Basic"/"Premium", etc.)
+		// Try exact match first, then try common variations
+		let price: number | undefined;
+
+		// Direct match (e.g., "Low", "High", "Midpoint")
+		if (typeof rateBand[pricePoint] === 'number') {
+			price = rateBand[pricePoint];
+		}
+
+		// Try lowercase variants
+		if (price === undefined) {
+			const pricePointLower = pricePoint.toLowerCase();
+			const matchingKey = Object.keys(rateBand).find(
+				key => key.toLowerCase() === pricePointLower
+			);
+			if (matchingKey && typeof rateBand[matchingKey] === 'number') {
+				price = rateBand[matchingKey];
+			}
+		}
+
+		// Calculate Midpoint if not found (average of Low and High)
+		if (price === undefined && pricePoint === "Midpoint") {
+			const low = rateBand['Low'] ?? rateBand['low'];
+			const high = rateBand['High'] ?? rateBand['high'];
+			if (typeof low === 'number' && typeof high === 'number') {
+				price = (low + high) / 2;
+			}
+		}
+
+		return price ?? 0;
+	}
+
+	// Legacy Calculator Sheet Mode: Use rateColumns (backward compatibility)
+	if (line.rateColumns) {
+		let rateBand: { low?: string | number; high?: string | number } | undefined;
+
+		if (clientSize === "Solo/Startup") {
+			rateBand = line.rateColumns.soloStartup;
+		} else if (clientSize === "Small Business") {
+			rateBand = line.rateColumns.smallBusiness;
+		} else if (clientSize === "Mid-Market") {
+			rateBand = line.rateColumns.midMarket;
+		}
+
+		if (!rateBand) return 0;
+
+		// Convert string rates to numbers (calculator sheets store as strings)
+		const low = typeof rateBand.low === 'string' ? parseFloat(rateBand.low) : rateBand.low ?? 0;
+		const high = typeof rateBand.high === 'string' ? parseFloat(rateBand.high) : rateBand.high ?? 0;
+
+		if (pricePoint === "Low") {
+			return low;
+		} else if (pricePoint === "High") {
+			return high;
+		} else {
+			// Midpoint
+			return (low + high) / 2;
+		}
+	}
+
+	return 0;
 }
 
 export async function calculatePricing(
@@ -796,46 +1083,82 @@ export async function calculatePricing(
 	});
 	const sheet = getSheet(workbook, mapping.calculatorSheet);
 
-	 ensureCalcFunctionsRegistered();
+	ensureCalcFunctionsRegistered();
 
-	writeString(sheet, mapping.clientSizeCell, input.clientSize);
-	writeString(sheet, mapping.pricePointCell, input.pricePoint);
+	// Check if this is a calculator sheet (has cellRefs) or pricing table (no cellRefs)
+	const isPricingTable = metadata.lineItems.length > 0 && !metadata.lineItems[0].cellRefs;
 
-	const paired = normalizeSelections(metadata, input.selections);
+	if (!isPricingTable) {
+		// Calculator sheet mode: write values to Excel and run formulas
+		writeString(sheet, mapping.clientSizeCell, input.clientSize);
+		writeString(sheet, mapping.pricePointCell, input.pricePoint);
 
-	for (const { line, selection } of paired) {
-		const selected = selection?.selected ?? line.defaultSelected;
-		const quantity = ensureNumber(selection?.quantity, line.defaultQuantity) || 0;
-		const includeMaintenance =
-			selection?.includeMaintenance ?? line.defaultMaintenance;
+		const paired = normalizeSelections(metadata, input.selections);
 
-		writeBoolean(sheet, line.cellRefs.select, selected);
-		writeNumber(sheet, line.cellRefs.quantity, quantity);
-		writeBoolean(sheet, line.cellRefs.maintenance, includeMaintenance);
+		for (const { line, selection } of paired) {
+			const selected = selection?.selected ?? line.defaultSelected;
+			const quantity = ensureNumber(selection?.quantity, line.defaultQuantity) || 0;
 
-		applyRateOverrides(sheet, line.rateColumns, selection?.rateOverrides);
+			if (line.cellRefs) {
+				writeBoolean(sheet, line.cellRefs.select, selected);
+				writeNumber(sheet, line.cellRefs.quantity, quantity);
+			}
+
+			applyRateOverrides(sheet, line.rateColumns, selection?.rateOverrides);
+		}
+
+		XLSX_CALC(workbook);
 	}
 
-	XLSX_CALC(workbook);
+	const paired = normalizeSelections(metadata, input.selections);
 
 	const lines: PricingLineResult[] = [];
 	let monthlySubtotal = 0;
 	let oneTimeSubtotal = 0;
-	let maintenanceSubtotal = 0;
+	const maintenanceSubtotalValue = metadata.totals.maintenanceSubtotal ? 0 : null;
 
 	for (const { line, selection } of paired) {
 		const selected = selection?.selected ?? line.defaultSelected;
 		const quantity = ensureNumber(selection?.quantity, line.defaultQuantity) || 0;
-		const includeMaintenance =
-			selection?.includeMaintenance ?? line.defaultMaintenance;
 		const overridePrice = selection?.overridePrice ?? null;
 
-		const unitPrice = readNumber(sheet, line.cellRefs.unitPrice);
-		const computedLineTotal = readNumber(sheet, line.cellRefs.lineTotal);
-		const maintenanceAmountCell = line.cellRefs.maintenanceTotal;
-		const maintenanceAmount = includeMaintenance && maintenanceAmountCell
-			? readNumber(sheet, maintenanceAmountCell)
-			: 0;
+		// Calculate unit price from rate bands instead of reading from Excel
+		// This works for both AI-generated and Excel-based line items
+		let unitPrice = calculateUnitPriceFromRates(line, input.clientSize, input.pricePoint);
+
+		// If custom rate overrides are provided, recalculate with those
+		if (selection?.rateOverrides) {
+			const customLine = { ...line, rateColumns: { ...line.rateColumns } };
+			// Merge custom rates (convert numbers to strings for rateColumns)
+			if (selection.rateOverrides.soloStartup) {
+				const override = selection.rateOverrides.soloStartup;
+				customLine.rateColumns.soloStartup = {
+					...line.rateColumns.soloStartup,
+					low: override.low != null ? String(override.low) : line.rateColumns.soloStartup?.low,
+					high: override.high != null ? String(override.high) : line.rateColumns.soloStartup?.high,
+					maintenance: override.maintenance != null ? String(override.maintenance) : line.rateColumns.soloStartup?.maintenance,
+				};
+			}
+			if (selection.rateOverrides.smallBusiness) {
+				const override = selection.rateOverrides.smallBusiness;
+				customLine.rateColumns.smallBusiness = {
+					...line.rateColumns.smallBusiness,
+					low: override.low != null ? String(override.low) : line.rateColumns.smallBusiness?.low,
+					high: override.high != null ? String(override.high) : line.rateColumns.smallBusiness?.high,
+					maintenance: override.maintenance != null ? String(override.maintenance) : line.rateColumns.smallBusiness?.maintenance,
+				};
+			}
+			if (selection.rateOverrides.midMarket) {
+				const override = selection.rateOverrides.midMarket;
+				customLine.rateColumns.midMarket = {
+					...line.rateColumns.midMarket,
+					low: override.low != null ? String(override.low) : line.rateColumns.midMarket?.low,
+					high: override.high != null ? String(override.high) : line.rateColumns.midMarket?.high,
+					maintenance: override.maintenance != null ? String(override.maintenance) : line.rateColumns.midMarket?.maintenance,
+				};
+			}
+			unitPrice = calculateUnitPriceFromRates(customLine, input.clientSize, input.pricePoint);
+		}
 
 		const effectiveUnitPrice = overridePrice ?? unitPrice;
 		const lineTotal = selected ? effectiveUnitPrice * quantity : 0;
@@ -847,44 +1170,49 @@ export async function calculatePricing(
 			billing: line.billing,
 			selected,
 			quantity,
-			includeMaintenance,
 			unitPrice,
 			overridePrice,
 			effectiveUnitPrice,
 			lineTotal,
-			maintenanceAmount: includeMaintenance ? maintenanceAmount : 0,
 			type: line.type,
 		};
 
 		if (selected) {
-			if (/monthly/i.test(line.type)) {
+			// Use chargeType (source of truth) instead of type display string
+			if (line.chargeType === "recurring") {
 				monthlySubtotal += lineTotal;
 			} else {
 				oneTimeSubtotal += lineTotal;
 			}
-			if (includeMaintenance) {
-				maintenanceSubtotal += maintenanceAmount;
-			}
 		}
 
-		// Apply override to workbook cells for export accuracy
-		if (overridePrice != null) {
-			removeFormulaAndWriteNumber(sheet, line.cellRefs.unitPrice, overridePrice);
-			removeFormulaAndWriteNumber(sheet, line.cellRefs.lineTotal, lineTotal);
-		} else {
-			// ensure workbook line total matches computed (for unselected consider 0)
-			removeFormulaAndWriteNumber(sheet, line.cellRefs.lineTotal, lineTotal);
+		// Apply override to workbook cells for export accuracy (calculator sheets only)
+		if (line.cellRefs) {
+			if (overridePrice != null) {
+				removeFormulaAndWriteNumber(sheet, line.cellRefs.unitPrice, overridePrice);
+				removeFormulaAndWriteNumber(sheet, line.cellRefs.lineTotal, lineTotal);
+			} else {
+				// ensure workbook line total matches computed (for unselected consider 0)
+				removeFormulaAndWriteNumber(sheet, line.cellRefs.lineTotal, lineTotal);
+			}
 		}
 
 		lines.push(result);
 	}
 
-	const grandTotalMonthOne = monthlySubtotal + oneTimeSubtotal + maintenanceSubtotal;
-	const ongoingMonthly = monthlySubtotal + maintenanceSubtotal;
+	const maintenanceContribution = maintenanceSubtotalValue ?? 0;
+	const grandTotalMonthOne = monthlySubtotal + oneTimeSubtotal + maintenanceContribution;
+	const ongoingMonthly = monthlySubtotal + maintenanceContribution;
 
 	removeFormulaAndWriteNumber(sheet, metadata.totals.monthlySubtotal, monthlySubtotal);
 	removeFormulaAndWriteNumber(sheet, metadata.totals.oneTimeSubtotal, oneTimeSubtotal);
-	removeFormulaAndWriteNumber(sheet, metadata.totals.maintenanceSubtotal, maintenanceSubtotal);
+	if (metadata.totals.maintenanceSubtotal) {
+		removeFormulaAndWriteNumber(
+			sheet,
+			metadata.totals.maintenanceSubtotal,
+			maintenanceContribution
+		);
+	}
 	removeFormulaAndWriteNumber(sheet, metadata.totals.grandTotal, grandTotalMonthOne);
 
 	const ongoingCell =
@@ -893,45 +1221,48 @@ export async function calculatePricing(
 		metadata.totals.monthlySubtotal;
 	removeFormulaAndWriteNumber(sheet, ongoingCell, ongoingMonthly);
 
-		const totals: PricingTotals = {
+	const totals: PricingTotals = {
 		monthlySubtotal,
 		oneTimeSubtotal,
-		maintenanceSubtotal,
-		grandTotalMonthOne,
 		ongoingMonthly,
+		grandTotalMonthOne,
 	};
 
-		if (input.quoteDetails) {
-			const quoteSheetName = mapping.quoteSheet;
-			const quoteSheet = quoteSheetName ? workbook.Sheets[quoteSheetName] : undefined;
-			if (quoteSheet) {
-				const { clientName, companyName, preparedBy, preparedForEmail, notes } =
-					input.quoteDetails;
-				const quoteFields =
-					mapping.quoteFields ?? DEFAULT_PRICING_WORKBOOK_MAPPING.quoteFields;
-				if (clientName && quoteFields?.clientName) {
-					writeString(quoteSheet, quoteFields.clientName, clientName);
-				}
-				if (companyName && quoteFields?.companyName) {
-					writeString(quoteSheet, quoteFields.companyName, companyName);
-				}
-				if (preparedBy && quoteFields?.preparedBy) {
-					writeString(quoteSheet, quoteFields.preparedBy, preparedBy);
-				}
-				if (quoteFields?.clientSize) {
-					writeString(quoteSheet, quoteFields.clientSize, input.clientSize);
-				}
-				if (quoteFields?.pricePoint) {
-					writeString(quoteSheet, quoteFields.pricePoint, input.pricePoint);
-				}
-				if (preparedForEmail && quoteFields?.preparedForEmail) {
-					writeString(quoteSheet, quoteFields.preparedForEmail, preparedForEmail);
-				}
-				if (notes && quoteFields?.notes) {
-					writeString(quoteSheet, quoteFields.notes, notes);
-				}
+	if (maintenanceSubtotalValue != null) {
+		totals.maintenanceSubtotal = maintenanceContribution;
+	}
+
+	if (input.quoteDetails) {
+		const quoteSheetName = mapping.quoteSheet;
+		const quoteSheet = quoteSheetName ? workbook.Sheets[quoteSheetName] : undefined;
+		if (quoteSheet) {
+			const { clientName, companyName, preparedBy, preparedForEmail, notes } =
+				input.quoteDetails;
+			const quoteFields =
+				mapping.quoteFields ?? DEFAULT_PRICING_WORKBOOK_MAPPING.quoteFields;
+			if (clientName && quoteFields?.clientName) {
+				writeString(quoteSheet, quoteFields.clientName, clientName);
+			}
+			if (companyName && quoteFields?.companyName) {
+				writeString(quoteSheet, quoteFields.companyName, companyName);
+			}
+			if (preparedBy && quoteFields?.preparedBy) {
+				writeString(quoteSheet, quoteFields.preparedBy, preparedBy);
+			}
+			if (quoteFields?.clientSize) {
+				writeString(quoteSheet, quoteFields.clientSize, input.clientSize);
+			}
+			if (quoteFields?.pricePoint) {
+				writeString(quoteSheet, quoteFields.pricePoint, input.pricePoint);
+			}
+			if (preparedForEmail && quoteFields?.preparedForEmail) {
+				writeString(quoteSheet, quoteFields.preparedForEmail, preparedForEmail);
+			}
+			if (notes && quoteFields?.notes) {
+				writeString(quoteSheet, quoteFields.notes, notes);
 			}
 		}
+	}
 
 	return {
 		metadata,

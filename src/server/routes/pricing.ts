@@ -71,11 +71,20 @@ async function runWorkbookAnalysis(
   }
 
   const attemptedModel = process.env.OPENAI_PRICING_MODEL || "gpt-4.1";
-  const resolvedMapping = mapping ?? mergeWorkbookMapping();
 
   let snapshot;
   try {
-    snapshot = extractWorkbookSnapshotFromBuffer(doc.data);
+    // If no mapping provided, extract ALL sheets for AI to analyze
+    // If mapping provided, only extract the specified calculator sheet
+    const sheetNames = mapping?.calculatorSheet
+      ? [mapping.calculatorSheet]
+      : undefined; // undefined = all sheets
+
+    snapshot = extractWorkbookSnapshotFromBuffer(doc.data, {
+      sheetNames,
+    });
+
+    console.log(`[pricing] Extracted workbook snapshot: ${snapshot.sheets.length} sheet(s)`);
   } catch (error: any) {
     const message =
       error?.message ||
@@ -96,9 +105,11 @@ async function runWorkbookAnalysis(
 
   if (hasApiKey) {
     try {
+      console.log("[pricing] Starting AI blueprint generation...");
       const blueprint = await generatePricingBlueprintWithAI(snapshot, {
         model: attemptedModel,
       });
+      console.log(`[pricing] AI extracted ${blueprint.services.length} services`);
       doc.blueprint = blueprint;
       doc.blueprintModel = attemptedModel;
       doc.blueprintGeneratedAt = new Date();
@@ -113,6 +124,8 @@ async function runWorkbookAnalysis(
     }
   }
 
+  // Fallback: use deterministic parser (requires mapping)
+  const resolvedMapping = mapping ?? mergeWorkbookMapping();
   const fallbackBlueprint = generateDeterministicPricingBlueprint(snapshot, resolvedMapping, {
     workbookFilename: doc.filename,
   });
@@ -166,10 +179,6 @@ function mergeLineOverrides(
         incomingSelection?.quantity ??
         defaultsOverride?.defaultQuantity ??
         line.defaultQuantity,
-      includeMaintenance:
-        incomingSelection?.includeMaintenance ??
-        defaultsOverride?.defaultMaintenance ??
-        line.defaultMaintenance,
       rateOverrides: incomingSelection?.rateOverrides ?? defaultsOverride?.customRates,
       overridePrice: incomingSelection?.overridePrice ?? null,
     });
@@ -207,7 +216,8 @@ function buildCalculationInput(
   };
 }
 
-router.get("/", requireAuth, requireAdmin, async (_req, res) => {
+router.get("/", requireAuth, requireAdmin, async (req, res) => {
+  console.log("[pricing] GET /api/pricing - Bootstrap endpoint called, user:", req.user?.email);
   const settings = await PricingSettingsModel.findOne().lean<IPricingSettings | null>();
   const workbookMapping = mergeWorkbookMapping(settings?.workbookMapping);
 
@@ -216,23 +226,30 @@ router.get("/", requireAuth, requireAdmin, async (_req, res) => {
   let message: string | null = null;
 
   let workbookDoc = await PricingWorkbookModel.findOne().sort({ uploadedAt: -1 });
+  console.log("[pricing] Workbook document retrieved:", {
+    hasDoc: !!workbookDoc,
+    filename: workbookDoc?.filename,
+    hasDataField: !!workbookDoc?.data,
+    dataType: workbookDoc?.data ? typeof workbookDoc.data : "undefined"
+  });
   const hasBinary = workbookHasBinary(workbookDoc);
   let setupRequired = !hasBinary;
 
-  try {
-    metadata = await getPricingMetadata(false, settings?.workbookMapping);
-    defaults = buildCalculationInput(metadata, {}, settings || null);
-  } catch (error: any) {
-    const errorMessage =
-      error?.message ||
-      (typeof error === "string" ? error : "Failed to load pricing metadata.");
-    message = errorMessage;
-    setupRequired = true;
-    console.warn("[pricing] Unable to load pricing metadata:", error);
-  }
-
-  if (!hasBinary && !message) {
+  if (!hasBinary) {
     message = "No pricing workbook found. Upload a workbook to enable the calculator.";
+    setupRequired = true;
+  } else {
+    try {
+      metadata = await getPricingMetadata(false, settings?.workbookMapping);
+      defaults = buildCalculationInput(metadata, {}, settings || null);
+    } catch (error: any) {
+      const errorMessage =
+        error?.message ||
+        (typeof error === "string" ? error : "Failed to load pricing metadata.");
+      message = errorMessage;
+      setupRequired = true;
+      console.warn("[pricing] Unable to load pricing metadata:", error);
+    }
   }
 
   if (workbookDoc && hasBinary) {
@@ -323,15 +340,14 @@ router.put("/settings", requireAuth, requireAdmin, async (req, res) => {
 
   const lineOverrides: PricingLineOverride[] = Array.isArray(payload.lineOverrides)
     ? payload.lineOverrides
-        .map((override: any) => ({
-          lineId: override.lineId,
-          defaultSelected: override.defaultSelected,
-          defaultQuantity: override.defaultQuantity,
-          defaultMaintenance: override.defaultMaintenance,
-          customRates: override.customRates,
-          notes: override.notes,
-        }))
-        .filter((override: PricingLineOverride) => override.lineId)
+      .map((override: any) => ({
+        lineId: override.lineId,
+        defaultSelected: override.defaultSelected,
+        defaultQuantity: override.defaultQuantity,
+        customRates: override.customRates,
+        notes: override.notes,
+      }))
+      .filter((override: PricingLineOverride) => override.lineId)
     : [];
 
   const exportRecipients: string[] = Array.isArray(payload.exportedEmailRecipients)
@@ -367,16 +383,15 @@ router.put("/settings", requireAuth, requireAdmin, async (req, res) => {
 router.put("/workbook", requireAuth, requireAdmin, async (req, res) => {
   try {
     const payload = req.body || {};
-    if (!payload.workbookMapping) {
-      return res.status(400).json({ error: "workbookMapping is required." });
-    }
 
-    const mergedMapping = mergeWorkbookMapping(payload.workbookMapping);
+    // workbookMapping is OPTIONAL - only used for manual fine-tuning after AI analysis
+    const userMapping = payload.workbookMapping;
     const workbookPayload = payload.workbook;
 
     let workbookDoc: PricingWorkbookDocument | null = null;
     let workbookUpdated = false;
 
+    // If workbook binary is provided, upload and analyze with AI
     if (workbookPayload?.data) {
       let buffer: Buffer;
       try {
@@ -387,6 +402,13 @@ router.put("/workbook", requireAuth, requireAdmin, async (req, res) => {
 
       if (!buffer.length) {
         return res.status(400).json({ error: "Workbook file is empty." });
+      }
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          `[pricing] Uploading workbook ${workbookPayload.filename || "(unnamed)"} ` +
+          `(base64 length=${workbookPayload.data.length}, buffer length=${buffer.length})`
+        );
       }
 
       const filename =
@@ -416,24 +438,32 @@ router.put("/workbook", requireAuth, requireAdmin, async (req, res) => {
       workbookDoc = await PricingWorkbookModel.findOne().sort({ uploadedAt: -1 });
     }
 
-    const updatedSettings = await PricingSettingsModel.findOneAndUpdate(
-      {},
-      {
-        $set: {
-          workbookMapping: mergedMapping,
-          lastUpdatedBy: req.user?.email,
-          updatedAt: new Date(),
+    // Save user mapping only if provided (for fine-tuning)
+    let updatedSettings: IPricingSettings | null = null;
+    if (userMapping) {
+      const mergedMapping = mergeWorkbookMapping(userMapping);
+      updatedSettings = await PricingSettingsModel.findOneAndUpdate(
+        {},
+        {
+          $set: {
+            workbookMapping: mergedMapping,
+            lastUpdatedBy: req.user?.email,
+            updatedAt: new Date(),
+          },
         },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean<IPricingSettings | null>();
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      ).lean<IPricingSettings | null>();
 
-    if (workbookUpdated || mergedMapping) {
-      await getPricingMetadata(true, mergedMapping);
+      // Regenerate metadata with user mapping
+      if (workbookDoc) {
+        await getPricingMetadata(true, mergedMapping);
+      }
     }
 
+    // AI analyzes workbook structure automatically (no mapping required)
     if (workbookDoc) {
-      const { error: analysisError } = await runWorkbookAnalysis(workbookDoc, mergedMapping);
+      const mappingForAnalysis = userMapping ? mergeWorkbookMapping(userMapping) : undefined;
+      const { error: analysisError } = await runWorkbookAnalysis(workbookDoc, mappingForAnalysis);
       if (analysisError) {
         console.warn("[pricing] Workbook analysis completed with warnings:", analysisError);
       }
@@ -444,7 +474,7 @@ router.put("/workbook", requireAuth, requireAdmin, async (req, res) => {
     );
 
     res.json({
-      mapping: mergedMapping,
+      mapping: userMapping ? mergeWorkbookMapping(userMapping) : null,
       workbook: workbookInfo,
       settings: updatedSettings,
       analysisError: workbookInfo?.blueprintError || null,

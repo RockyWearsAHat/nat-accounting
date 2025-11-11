@@ -222,6 +222,54 @@
   padding: 32px;
 }
 
+.analysisSection {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.analysisSection h5 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.analysisMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.analysisOutput {
+  max-height: 220px;
+  overflow: auto;
+  background: rgba(9, 9, 12, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+}
+
+.analysisOutput::-webkit-scrollbar {
+  width: 6px;
+}
+
+.analysisOutput::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+}
+
 .uploadCard {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -254,6 +302,28 @@
 .uploadButton:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.24);
+}
+
+.dropZone {
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+.dropZoneActive {
+  border-color: rgba(40, 180, 140, 0.5);
+  background: rgba(40, 180, 140, 0.08);
+}
+
+.uploadStatus {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .uploadMeta {

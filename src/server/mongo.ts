@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import type { Db } from "mongodb";
 
 let connected = false;
 
@@ -17,6 +18,17 @@ export async function connect() {
   }
   connected = true;
   console.log("Mongo connected");
+}
+
+/**
+ * Get the native MongoDB database instance for GridFS and other operations
+ */
+export function getDb(): Db {
+  if (!mongoose.connection.db) {
+    throw new Error("MongoDB not connected. Call connect() first.");
+  }
+  // Type cast to handle version mismatch between mongoose's mongodb and our mongodb package
+  return mongoose.connection.db as any as Db;
 }
 
 // ...existing connection logic...

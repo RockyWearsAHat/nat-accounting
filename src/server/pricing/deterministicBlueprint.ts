@@ -119,6 +119,27 @@ function normalizeBilling(value: string | undefined): string {
     .join(" ");
 }
 
+// Determine chargeType from billing cadence string
+function determineChargeType(billing: string): "recurring" | "one-time" {
+  const lower = billing.toLowerCase();
+
+  // Check for recurring indicators
+  if (
+    lower.includes("month") ||
+    lower.includes("quarter") ||
+    lower.includes("annual") ||
+    lower.includes("year") ||
+    lower.includes("retainer") ||
+    lower.includes("ongoing") ||
+    lower.includes("recurring")
+  ) {
+    return "recurring";
+  }
+
+  // Default to one-time for project/session/setup/etc
+  return "one-time";
+}
+
 function buildServices(
   sheet: PricingWorkbookSnapshot["sheets"][number],
   mapping: PricingWorkbookMapping
@@ -145,15 +166,14 @@ function buildServices(
 
     const tier = asString(getCellValue(row, mapping.columns.tier));
     const billing = normalizeBilling(asString(getCellValue(row, mapping.columns.billing)));
+    const chargeType = determineChargeType(billing);
     const description = mapping.columns.description
       ? asString(getCellValue(row, mapping.columns.description))
       : undefined;
     const quantity = parseNumber(getCellValue(row, mapping.columns.quantity));
     const defaultSelected = parseBoolean(getCellValue(row, mapping.columns.select));
-    const defaultMaintenance = parseBoolean(
-      getCellValue(row, mapping.columns.maintenanceToggle)
-    );
 
+    // Build rate bands with flexible structure (new format)
     const rateBands: PricingServiceBlueprint["rateBands"] = {};
     for (const key of SEGMENT_KEYS) {
       const columnSet = mapping.columns.rateColumns[key];
@@ -162,12 +182,15 @@ function buildServices(
       const maintenance = columnSet.maintenance
         ? parseNumber(getCellValue(row, columnSet.maintenance))
         : undefined;
+
       if (low != null || high != null || maintenance != null) {
-        rateBands[SEGMENT_LABELS[key]] = {
-          low: low ?? null,
-          high: high ?? null,
-          maintenance: maintenance ?? null,
-        };
+        // NEW: Flexible rate structure - build object with discovered price point names
+        const pricePoints: Record<string, number | null> = {};
+        if (low != null) pricePoints.low = low;
+        if (high != null) pricePoints.high = high;
+        if (maintenance != null) pricePoints.maintenance = maintenance;
+
+        rateBands[SEGMENT_LABELS[key]] = pricePoints;
       }
     }
 
@@ -177,10 +200,10 @@ function buildServices(
       tier: tier || undefined,
       name: serviceName,
       billingCadence: billing,
+      chargeType, // NEW: Add chargeType
       description,
       defaultSelected,
       defaultQuantity: quantity,
-      defaultMaintenance,
       rateBands,
     });
   }
@@ -214,6 +237,20 @@ export function generateDeterministicPricingBlueprint(
       generatedAt,
       generatedBy: "deterministic-summary",
       notes,
+      // Populate columnMapping from the provided mapping so parser doesn't fail
+      columnMapping: {
+        select: mapping.columns.select,
+        quantity: mapping.columns.quantity,
+        tier: mapping.columns.tier,
+        service: mapping.columns.service,
+        billing: mapping.columns.billing,
+        unitPrice: mapping.columns.unitPrice,
+        lineTotal: mapping.columns.lineTotal,
+        type: mapping.columns.type,
+      },
+      headerRow: mapping.lineItemsRange.startRow - 1, // Header is one row before data
+      dataStartRow: mapping.lineItemsRange.startRow,
+      dataEndRow: mapping.lineItemsRange.endRow,
     },
     clientSegments: SEGMENT_KEYS.map((key) => SEGMENT_LABELS[key]),
     pricePoints: ["Low", "High"],
