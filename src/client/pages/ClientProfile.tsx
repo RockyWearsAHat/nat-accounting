@@ -33,7 +33,8 @@ interface ServiceRequest {
 }
 
 interface Invoice {
-  id: string;
+  _id: string;
+  id?: string; // Keep for backward compatibility
   invoiceNumber: string;
   amount: number;
   status: "admin-draft" | "pending-approval" | "sent" | "paid" | "overdue" | "cancelled";
@@ -844,7 +845,7 @@ export const ClientProfile: React.FC = () => {
                     <div className={styles.breadcrumb}>
                       <button onClick={handleBackToRoot} className={styles.breadcrumbLink}>
                         <Folder size={18} style={{ marginRight: "4px" }} />
-                        My Documents
+                        {user?.company ? `${user.company}'s Workspace` : "My Workspace"}
                       </button>
                       {getBreadcrumbs().map((segment, index) => {
                         const path = getBreadcrumbs().slice(0, index + 1).join("/");
@@ -869,7 +870,7 @@ export const ClientProfile: React.FC = () => {
                   ) : (
                     <h2 className={styles.sectionTitle}>
                       <Folder size={24} style={{ marginRight: "8px", verticalAlign: "middle" }} />
-                      My Documents
+                      {user?.company ? `${user.company}'s Workspace` : "My Workspace"}
                     </h2>
                   )}
                 </div>
@@ -1048,7 +1049,7 @@ export const ClientProfile: React.FC = () => {
                         <div className={styles.invoiceActions}>
                           <button 
                             className={styles.primaryButton}
-                            onClick={() => handleApproveInvoice(inv.id)}
+                            onClick={() => handleApproveInvoice(inv._id || inv.id || '')}
                             style={{ backgroundColor: "#2a7f3e" }}
                           >
                             ✅ Approve
@@ -1113,7 +1114,7 @@ export const ClientProfile: React.FC = () => {
                           {(inv.status === "sent" || inv.status === "overdue") && (
                             <button 
                               className={styles.primaryButton}
-                              onClick={() => handlePayInvoice(inv.id)}
+                              onClick={() => handlePayInvoice(inv._id || inv.id || '')}
                             >
                               Pay Now
                             </button>
