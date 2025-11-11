@@ -2,7 +2,7 @@ import typescript from "@rollup/plugin-typescript";
 import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import {globSync} from "glob";
-import { extname } from "node:path";
+import { extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { builtinModules } from "node:module";
 import copy from "rollup-plugin-copy";
@@ -32,10 +32,10 @@ export default [
       preserveModules: true,
       preserveModulesRoot: "src",
     },
-    external: [
-      ...builtinModules,
-      ...builtinModules.map(name => `node:${name}`)
-    ],
+    external(id) {
+      // Mark node_modules and built-in modules as external
+      return id.includes(sep + "node_modules" + sep) || builtinModules.includes(id) || builtinModules.includes(id.replace(/^node:/, ''));
+    },
     plugins: [
       typescript({ 
         moduleResolution: "bundler",
@@ -44,11 +44,14 @@ export default [
         outDir: "dist"
       }),
       resolve({ 
-        preferBuiltins: true, 
+        preferBuiltins: true,
+        jsnext: true,
+        main: true,
         exportConditions: ['node']
       }),
       commonjs({ 
-        ignoreDynamicRequires: true
+        ignoreDynamicRequires: true,
+        ignore: builtinModules
       }),
       copy({
         targets: [
