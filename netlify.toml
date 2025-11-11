@@ -6,11 +6,12 @@
   NODE_VERSION = "23.9.0"
 
 [functions]
-  directory = "dist/server"
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/index/:splat"
+  to = "/.netlify/functions/api/:splat"
   status = 200
 
 # SPA redirect for client-side routing
