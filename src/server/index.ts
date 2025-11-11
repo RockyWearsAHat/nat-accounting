@@ -52,27 +52,27 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
 });
 
-// 🔥 CRITICAL: Import and mount ALL routes at MODULE LEVEL (before startServer)
+// Import and mount ALL routes at MODULE LEVEL (before startServer)
 // This ensures routes are available immediately when the module loads (required for serverless)
-const { router: consultationRouter } = await import("./routes/consultations");
-const { default: availabilityRouter } = await import("./routes/availability-simple");
-const { router: scheduleRouter } = await import("./routes/schedule");
-const { router: authRouter } = await import("./routes/auth");
-const { router: calendarRouter } = await import("./routes/calendar");
-const { router: icloudRouter } = await import("./routes/icloud");
-const { router: googleRouter } = await import("./routes/google");
-const { router: mergedRouter } = await import("./routes/merged");
-const { router: cachedRouter } = await import("./routes/cached");
-const { router: hoursRouter } = await import("./routes/hours");
-const { router: settingsRouter } = await import("./routes/settings");
-const { router: debugRouter } = await import("./routes/debug");
-const { default: zoomRouter } = await import("./routes/zoom");
-const { default: meetingsRouter } = await import("./routes/meetings");
-const { default: pricingRouter } = await import("./routes/pricing");
-const { default: clientRouter } = await import("./routes/client");
-const { default: documentsRouter } = await import("./routes/documents");
-const { default: subscriptionsRouter } = await import("./routes/subscriptions");
-const { default: invoicesRouter } = await import("./routes/invoices");
+import { router as consultationRouter } from "./routes/consultations.js";
+import availabilityRouter from "./routes/availability-simple.js";
+import { router as scheduleRouter } from "./routes/schedule.js";
+import { router as authRouter } from "./routes/auth.js";
+import { router as calendarRouter } from "./routes/calendar.js";
+import { router as icloudRouter } from "./routes/icloud.js";
+import { router as googleRouter } from "./routes/google.js";
+import { router as mergedRouter } from "./routes/merged.js";
+import { router as cachedRouter } from "./routes/cached.js";
+import { router as hoursRouter } from "./routes/hours.js";
+import { router as settingsRouter } from "./routes/settings.js";
+import { router as debugRouter } from "./routes/debug.js";
+import zoomRouter from "./routes/zoom.js";
+import meetingsRouter from "./routes/meetings.js";
+import pricingRouter from "./routes/pricing.js";
+import clientRouter from "./routes/client.js";
+import documentsRouter from "./routes/documents.js";
+import subscriptionsRouter from "./routes/subscriptions.js";
+import invoicesRouter from "./routes/invoices.js";
 
 // Mount all API routes at MODULE LEVEL (before startServer - matches working example)
 app.use("/api/auth", authRouter);

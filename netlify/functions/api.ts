@@ -5,7 +5,7 @@
  * It imports the compiled Express app and wraps it with serverless-http.
  */
 
-import { handler } from "../../dist/server/index.js";
+import { handler } from "../../src/server/index";
 
 // Re-export the handler for Netlify Functions
 export { handler };
