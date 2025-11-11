@@ -33,10 +33,8 @@ export default [
       preserveModulesRoot: "src",
     },
     external: [
-      // Mark all node_modules as external
       ...builtinModules,
-      ...builtinModules.map(name => `node:${name}`),
-      /node_modules/
+      ...builtinModules.map(name => `node:${name}`)
     ],
     plugins: [
       typescript({ 
