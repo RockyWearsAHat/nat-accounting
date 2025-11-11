@@ -9,6 +9,13 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+[functions."api"]
+  node_bundler = "esbuild"
+
+[functions."api".esbuild]
+  format = "esm"
+  external_node_modules = ["*"]
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
