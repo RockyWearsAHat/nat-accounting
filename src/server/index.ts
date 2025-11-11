@@ -1,7 +1,7 @@
 import "./loadEnv";
 import express from "express";
 import cors from "cors";
-import { connect } from "./mongo";
+import { connectDB, disconnectDB } from "./mongo";
 import cookieParser from "cookie-parser";
 import serverless from "serverless-http";
 
@@ -53,12 +53,13 @@ app.get("/api/health", (_req, res) => {
 });
 
 const startServer = async () => {
-  // Set up database connection FIRST
+  // ✅ Set up database connection FIRST (singleton pattern)
   try {
-    await connect();
+    await connectDB();
     console.log("✅ Database connected for main application");
   } catch (error) {
-    console.error("Failed to set up database connection:", error);
+    console.error("❌ Failed to set up database connection:", error);
+    // Continue startup - individual routes will fail gracefully if DB needed
   }
 
   // Import and mount routes AFTER database is connected
@@ -184,7 +185,8 @@ const gracefulShutdown = async (signal: string) => {
   console.log(`📥 ${signal} received, shutting down gracefully`);
 
   try {
-    // Add any cleanup logic here if needed
+    // Close database connection
+    await disconnectDB();
     console.log("✅ Graceful shutdown completed");
   } catch (error) {
     console.error("Error during shutdown:", error);
@@ -206,7 +208,7 @@ process.on("uncaughtException", async (error) => {
   isShuttingDown = true;
 
   try {
-    // Add cleanup logic here
+    await disconnectDB();
   } catch (shutdownError) {
     console.error("Error during exception shutdown:", shutdownError);
   } finally {
@@ -222,7 +224,7 @@ process.on("unhandledRejection", async (reason, promise) => {
   isShuttingDown = true;
 
   try {
-    // Add cleanup logic here
+    await disconnectDB();
   } catch (shutdownError) {
     console.error("Error during rejection shutdown:", shutdownError);
   } finally {
