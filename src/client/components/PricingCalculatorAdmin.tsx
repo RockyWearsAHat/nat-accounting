@@ -249,6 +249,8 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
   const [billingDay, setBillingDay] = useState(15);
   const [creatingSubscription, setCreatingSubscription] = useState(false);
   const [mappingExpanded, setMappingExpanded] = useState(false);
+  const [copiedInvoice, setCopiedInvoice] = useState<any | null>(null);
+  const [invoiceMode, setInvoiceMode] = useState<'replace' | 'merge'>('replace');
   const basePriceKey = form ? `${form.clientSize}|${form.pricePoint}` : "none";
 
   const applyWorkbookResponse = useCallback((response: PricingWorkbookUpdateResponse) => {
@@ -638,18 +640,81 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
         // Calculate totals based only on selected items
         const selectedSubtotal = selectedLines.reduce((sum, line) => sum + line.lineTotal, 0);
 
+        let lineItems = selectedLines.map(line => ({
+          description: line.service,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          amount: line.lineTotal,
+        }));
+
+        // Check for existing invoice in the same billing month
+        const existingInvoices = await http.get<Array<{
+          _id: string;
+          invoiceNumber: string;
+          status: string;
+          total: number;
+          createdAt: string;
+          billingMonth: string;
+          lineItems?: Array<{ description: string; quantity: number; unitPrice: number; amount: number }>;
+          subtotal?: number;
+        }>>(`/api/invoices/admin/invoices?userId=${selectedUserId}&billingMonth=${billingMonth}`);
+
+        const existingInvoice = existingInvoices.find(inv => inv.billingMonth === billingMonth && inv.status !== 'cancelled');
+
+        let subtotal = selectedSubtotal;
+        let invoiceIdToUpdate = selectedInvoiceId;
+
+        // If there's an existing invoice for this month and we're not already editing it
+        if (existingInvoice && existingInvoice._id !== selectedInvoiceId && invoiceMode === 'merge') {
+          // Merge mode: combine line items
+          const existingLineItems = existingInvoice.lineItems || [];
+          
+          // Separate one-time and recurring charges
+          const existingOneTime: typeof lineItems = [];
+          const existingRecurring: typeof lineItems = [];
+          
+          existingLineItems.forEach(item => {
+            // Simple heuristic: if description contains "monthly", "quarterly", "annual", it's recurring
+            const isRecurring = /\b(monthly|quarterly|annual|recurring|subscription)\b/i.test(item.description);
+            if (isRecurring) {
+              existingRecurring.push(item);
+            } else {
+              existingOneTime.push(item);
+            }
+          });
+
+          const newOneTime: typeof lineItems = [];
+          const newRecurring: typeof lineItems = [];
+          
+          lineItems.forEach(item => {
+            const isRecurring = /\b(monthly|quarterly|annual|recurring|subscription)\b/i.test(item.description);
+            if (isRecurring) {
+              newRecurring.push(item);
+            } else {
+              newOneTime.push(item);
+            }
+          });
+
+          // Merge: keep all one-time charges from both, use new recurring charges
+          lineItems = [...existingOneTime, ...newOneTime, ...newRecurring];
+          subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+          invoiceIdToUpdate = existingInvoice._id; // Update the existing invoice
+          
+          setStatus("Merging with existing invoice for this month...");
+        } else if (existingInvoice && existingInvoice._id !== selectedInvoiceId && invoiceMode === 'replace') {
+          // Replace mode: delete the old invoice and create new one
+          await http.del(`/api/invoices/admin/invoices/${existingInvoice._id}`);
+          invoiceIdToUpdate = ''; // Force creation of new invoice
+          setStatus("Replacing existing invoice for this month...");
+        }
+
         const invoicePayload = {
           userId: selectedUserId,
           userEmail: selectedUser.email,
-          lineItems: selectedLines.map(line => ({
-            description: line.service,
-            quantity: line.quantity,
-            unitPrice: line.unitPrice,
-            amount: line.lineTotal,
-          })),
-          subtotal: selectedSubtotal,
+          lineItems,
+          subtotal,
           tax: 0,
-          total: selectedSubtotal,
+          total: subtotal,
           dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
           billingMonth,
           notes: form.quoteDetails.notes || "",
@@ -658,16 +723,16 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
         };
 
         // Update existing invoice if one is selected, otherwise create new
-        if (selectedInvoiceId) {
+        if (invoiceIdToUpdate) {
           // Update existing invoice
-          await http.put(`/api/invoices/admin/invoices/${selectedInvoiceId}`, invoicePayload);
+          await http.put(`/api/invoices/admin/invoices/${invoiceIdToUpdate}`, invoicePayload);
           
           if (status === "admin-draft") {
             setStatus("Draft updated (admin only)");
           } else if (status === "pending-approval") {
             setStatus(`Invoice updated and sent for approval to ${selectedUser.company || selectedUser.email}`);
           } else if (status === "sent") {
-            await http.post(`/api/invoices/admin/invoices/${selectedInvoiceId}/publish`);
+            await http.post(`/api/invoices/admin/invoices/${invoiceIdToUpdate}/publish`);
             setStatus(`Invoice updated and published to ${selectedUser.company || selectedUser.email}`);
           }
         } else {
@@ -851,18 +916,52 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
           billingMonth: string;
         }>(`/api/invoices/admin/invoices/${invoiceId}`);
 
-        // Create a copy with "(Copy)" appended to name
-        const copyPayload = {
-          userId: invoice.userId,
-          userEmail: invoice.userEmail,
+        // Store invoice data in clipboard state
+        setCopiedInvoice({
           lineItems: invoice.lineItems,
           subtotal: invoice.subtotal,
           tax: invoice.tax,
           total: invoice.total,
-          dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-          billingMonth: invoice.billingMonth,
           notes: invoice.notes || "",
-          customName: `${invoice.customName || invoice.invoiceNumber} (Copy)`,
+          billingMonth: invoice.billingMonth,
+          customName: invoice.customName,
+          originalInvoiceNumber: invoice.invoiceNumber,
+        });
+
+        setStatus("Invoice copied to clipboard");
+      } catch (error: any) {
+        console.error("[PricingCalculator] Failed to copy invoice:", error);
+        setStatus(error?.data?.error || "Failed to copy invoice");
+      }
+    },
+    []
+  );
+
+  const handlePasteInvoice = useCallback(
+    async () => {
+      if (!copiedInvoice || !selectedUserId) {
+        setStatus("No invoice in clipboard or no client selected");
+        return;
+      }
+
+      try {
+        const user = users.find(u => u._id === selectedUserId);
+        if (!user) {
+          setStatus("Selected user not found");
+          return;
+        }
+
+        const copyPayload = {
+          userId: selectedUserId,
+          userEmail: user.email,
+          lineItems: copiedInvoice.lineItems,
+          subtotal: copiedInvoice.subtotal,
+          tax: copiedInvoice.tax,
+          total: copiedInvoice.total,
+          dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+          billingMonth: copiedInvoice.billingMonth,
+          notes: copiedInvoice.notes,
+          customName: `${copiedInvoice.customName || copiedInvoice.originalInvoiceNumber} (Copy)`,
           status: "admin-draft",
         };
 
@@ -883,15 +982,15 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
         }>>(`/api/invoices/admin/invoices?userId=${selectedUserId}`);
         setUserInvoices(invoices);
 
-        // Load the copied invoice
+        // Load the pasted invoice
         handleLoadInvoice(createResponse.invoice._id);
-        setStatus("Invoice copied");
+        setStatus("Invoice pasted successfully");
       } catch (error: any) {
-        console.error("[PricingCalculator] Failed to copy invoice:", error);
-        setStatus(error?.data?.error || "Failed to copy invoice");
+        console.error("[PricingCalculator] Failed to paste invoice:", error);
+        setStatus(error?.data?.error || "Failed to paste invoice");
       }
     },
-    [selectedUserId, handleLoadInvoice]
+    [copiedInvoice, selectedUserId, users, handleLoadInvoice]
   );
 
 
@@ -1268,7 +1367,7 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
         </div>
 
         {/* Invoice Cards - Full width below client selector */}
-        {selectedUserId && userInvoices.length > 0 && (
+        {selectedUserId && (
           <div className={styles.invoiceListContainer}>
             <div className={styles.invoiceListScroll}>
               <div
@@ -1277,6 +1376,15 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
               >
                 + New Invoice
               </div>
+              {copiedInvoice && (
+                <div
+                  className={styles.pasteInvoiceCard}
+                  onClick={handlePasteInvoice}
+                  title="Click to paste copied invoice"
+                >
+                  📋 Paste Invoice
+                </div>
+              )}
               {userInvoices.map((invoice) => (
                 <div
                   key={invoice._id}
@@ -1629,36 +1737,67 @@ const PricingCalculatorAdmin = (): JSX.Element | null => {
 
         {/* Invoice Actions - Only shown when client is selected */}
         {selectedUserId && (
-          <div className={styles.actionsRow} style={{ marginTop: "1rem", borderTop: "1px solid #333", paddingTop: "1rem" }}>
-            <button
-              type="button"
-              className={styles.buttonGhost}
-              onClick={() => handleSaveInvoiceDraft("admin-draft")}
-              disabled={saving || calculating || !calculation}
-              title="Save progress (admin only)"
-            >
-              {saving ? "Saving…" : "💾 Save Progress"}
-            </button>
-            <button
-              type="button"
-              className={styles.buttonPrimary}
-              onClick={() => handleSaveInvoiceDraft("pending-approval")}
-              disabled={saving || calculating || !calculation}
-              title="Send to client for approval"
-            >
-              {saving ? "Sending…" : "📤 Send for Approval"}
-            </button>
-            <button
-              type="button"
-              className={styles.buttonPrimary}
-              onClick={() => handleSaveInvoiceDraft("sent")}
-              disabled={saving || calculating || !calculation}
-              title="Publish invoice immediately"
-              style={{ backgroundColor: "#2a7f3e" }}
-            >
-              {saving ? "Publishing…" : "✅ Publish Invoice"}
-            </button>
-          </div>
+          <>
+            {/* Invoice Mode Toggle */}
+            <div className={styles.invoiceModeSection} style={{ marginTop: "1rem", padding: "1rem", background: "rgba(255, 255, 255, 0.02)", borderRadius: "8px" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "1rem", fontSize: "0.9rem" }}>
+                <span style={{ fontWeight: 500 }}>If an invoice exists for this month:</span>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="invoiceMode"
+                      value="replace"
+                      checked={invoiceMode === 'replace'}
+                      onChange={() => setInvoiceMode('replace')}
+                    />
+                    <span>Replace</span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="invoiceMode"
+                      value="merge"
+                      checked={invoiceMode === 'merge'}
+                      onChange={() => setInvoiceMode('merge')}
+                    />
+                    <span>Merge (keep one-time charges, update recurring)</span>
+                  </label>
+                </div>
+              </label>
+            </div>
+            
+            <div className={styles.actionsRow} style={{ marginTop: "1rem", borderTop: "1px solid #333", paddingTop: "1rem" }}>
+              <button
+                type="button"
+                className={styles.buttonGhost}
+                onClick={() => handleSaveInvoiceDraft("admin-draft")}
+                disabled={saving || calculating || !calculation}
+                title="Save progress (admin only)"
+              >
+                {saving ? "Saving…" : "💾 Save Progress"}
+              </button>
+              <button
+                type="button"
+                className={styles.buttonPrimary}
+                onClick={() => handleSaveInvoiceDraft("pending-approval")}
+                disabled={saving || calculating || !calculation}
+                title="Send to client for approval"
+              >
+                {saving ? "Sending…" : "📤 Send for Approval"}
+              </button>
+              <button
+                type="button"
+                className={styles.buttonPrimary}
+                onClick={() => handleSaveInvoiceDraft("sent")}
+                disabled={saving || calculating || !calculation}
+                title="Publish invoice immediately"
+                style={{ backgroundColor: "#2a7f3e" }}
+              >
+                {saving ? "Publishing…" : "✅ Publish Invoice"}
+              </button>
+            </div>
+          </>
         )}
       </section>
     );

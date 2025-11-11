@@ -88,16 +88,8 @@ export const AdminDocumentsSection: React.FC = () => {
                     });
                 }
                 foldersInCurrentDir.get(fullPath)!.count += folder.count;
-            } else if (folderPath === currentPath) {
-                // Exact match - this is the current folder, count its files
-                if (!foldersInCurrentDir.has(folderPath)) {
-                    foldersInCurrentDir.set(folderPath, {
-                        name: folderPath,
-                        color: folder.color,
-                        count: folder.count,
-                    });
-                }
             }
+            // Note: We don't show the current folder itself - only its subfolders and files
         });
         
         return Array.from(foldersInCurrentDir.values());
@@ -374,7 +366,7 @@ export const AdminDocumentsSection: React.FC = () => {
                 <div className={styles.breadcrumbs}>
                     <button onClick={handleBackToRoot} className={styles.breadcrumbButton}>
                         <Folder size={18} style={{ marginRight: '4px' }} />
-                        Documents
+                        {selectedUser?.company ? `${selectedUser.company}'s Workspace` : `${selectedUser?.email}'s Workspace`}
                     </button>
                     {getBreadcrumbs().map((segment, index) => {
                         const path = getBreadcrumbs().slice(0, index + 1).join("/");

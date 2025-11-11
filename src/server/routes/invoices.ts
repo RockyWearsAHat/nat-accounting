@@ -13,11 +13,12 @@ const router = Router();
 // Get all invoices (admin)
 router.get("/admin/invoices", requireAuth, requireAdmin, async (req, res) => {
     try {
-        const { userId, status } = req.query;
+        const { userId, status, billingMonth } = req.query;
         const filter: any = {};
 
         if (userId) filter.userId = userId;
         if (status) filter.status = status;
+        if (billingMonth) filter.billingMonth = billingMonth;
 
         const invoices = await InvoiceModel.find(filter)
             .sort({ createdAt: -1 })
@@ -257,7 +258,7 @@ router.get("/admin/user/:userId/current", requireAuth, requireAdmin, async (req,
 });// ==================== CLIENT INVOICE ACCESS ====================
 
 // Get user's own invoices (client)
-router.get("/invoices", requireAuth, async (req, res) => {
+router.get("/", requireAuth, async (req, res) => {
     try {
         const userId = (req as any).user.id;
 
@@ -277,7 +278,7 @@ router.get("/invoices", requireAuth, async (req, res) => {
 });
 
 // Get single invoice (client - own only)
-router.get("/invoices/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, async (req, res) => {
     try {
         const userId = (req as any).user.id;
         const invoice = await InvoiceModel.findOne({
@@ -302,7 +303,7 @@ router.get("/invoices/:id", requireAuth, async (req, res) => {
 });
 
 // Approve pending invoice (client)
-router.post("/invoices/:id/approve", requireAuth, async (req, res) => {
+router.post("/:id/approve", requireAuth, async (req, res) => {
     try {
         const userId = (req as any).user.id;
         const invoice = await InvoiceModel.findOne({

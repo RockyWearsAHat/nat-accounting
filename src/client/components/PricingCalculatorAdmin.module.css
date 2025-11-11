@@ -425,7 +425,7 @@
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   position: relative;
   flex-shrink: 0;
 }
@@ -456,14 +456,19 @@
   gap: 2px;
   font-size: 0.75rem;
   color: rgba(245, 245, 245, 0.6);
+  flex: 1;
+  min-height: 0;
+  justify-content: flex-start;
 }
 
 .invoiceCardActions {
   display: flex;
-  gap: 5px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 8px;
   opacity: 0;
   transition: opacity 0.2s ease;
+  align-items: stretch;
+  width: 100%;
 }
 
 .invoiceCard:hover .invoiceCardActions {
@@ -471,14 +476,20 @@
 }
 
 .invoiceActionBtn {
-  padding: 3px 8px;
+  padding: 5px 0;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 5px;
-  color: #f5f5f5;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: rgba(245, 245, 245, 0.9);
   font-size: 0.7rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+  line-height: 1;
 }
 
 .invoiceActionBtn:hover {
@@ -521,4 +532,30 @@
   border-color: rgba(99, 179, 237, 0.6);
   background: rgba(99, 179, 237, 0.12);
   color: rgba(99, 179, 237, 1);
+}
+
+.pasteInvoiceCard {
+  min-width: 140px;
+  max-width: 140px;
+  padding: 10px 12px;
+  border: 1.5px dashed rgba(34, 197, 94, 0.4);
+  border-radius: 8px;
+  background: rgba(34, 197, 94, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: rgba(34, 197, 94, 0.9);
+  font-weight: 500;
+  flex-shrink: 0;
+  height: 70px;
+}
+
+.pasteInvoiceCard:hover {
+  border-color: rgba(34, 197, 94, 0.6);
+  background: rgba(34, 197, 94, 0.15);
+  color: rgba(34, 197, 94, 1);
+  transform: scale(1.02);
 }
