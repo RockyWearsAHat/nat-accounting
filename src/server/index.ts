@@ -26,7 +26,7 @@ app.use(cors({
       "http://localhost:4000", // Local
       "http://localhost:5173", // Vite dev server
       "https://mayraccountingservices.netlify.app", // Netlify domain
-      "https://nat-accounting.com", // If you have a custom domain
+      "https://mayrconsultingservices.com"
     ];
 
     if (origin && allowedOrigins.indexOf(origin) !== -1) {
