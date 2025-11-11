@@ -52,86 +52,79 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
 });
 
+// 🔥 CRITICAL: Import and mount ALL routes at MODULE LEVEL (before startServer)
+// This ensures routes are available immediately when the module loads (required for serverless)
+const { router: consultationRouter } = await import("./routes/consultations");
+const { default: availabilityRouter } = await import("./routes/availability-simple");
+const { router: scheduleRouter } = await import("./routes/schedule");
+const { router: authRouter } = await import("./routes/auth");
+const { router: calendarRouter } = await import("./routes/calendar");
+const { router: icloudRouter } = await import("./routes/icloud");
+const { router: googleRouter } = await import("./routes/google");
+const { router: mergedRouter } = await import("./routes/merged");
+const { router: cachedRouter } = await import("./routes/cached");
+const { router: hoursRouter } = await import("./routes/hours");
+const { router: settingsRouter } = await import("./routes/settings");
+const { router: debugRouter } = await import("./routes/debug");
+const { default: zoomRouter } = await import("./routes/zoom");
+const { default: meetingsRouter } = await import("./routes/meetings");
+const { default: pricingRouter } = await import("./routes/pricing");
+const { default: clientRouter } = await import("./routes/client");
+const { default: documentsRouter } = await import("./routes/documents");
+const { default: subscriptionsRouter } = await import("./routes/subscriptions");
+const { default: invoicesRouter } = await import("./routes/invoices");
+
+// Mount all API routes at MODULE LEVEL (before startServer - matches working example)
+app.use("/api/auth", authRouter);
+app.use("/api/consultations", consultationRouter);
+app.use("/api/availability", availabilityRouter);
+app.use("/api/schedule", scheduleRouter);
+app.use("/api/calendar", calendarRouter);
+app.use("/api/icloud", icloudRouter);
+app.use("/api/google", googleRouter);
+app.use("/api/cached", cachedRouter);
+app.use("/api/merged", mergedRouter);
+app.use("/api/hours", hoursRouter);
+app.use("/api/settings", settingsRouter);
+app.use("/api/meetings", meetingsRouter);
+app.use("/api/pricing", pricingRouter);
+app.use("/api/client", clientRouter);
+app.use("/api/client/documents", documentsRouter);
+app.use("/api/subscriptions", subscriptionsRouter);
+app.use("/api/invoices", invoicesRouter);
+app.use("/api/zoom", zoomRouter);
+
+// Debug routes only in development
+if (process.env.NODE_ENV !== "production") {
+  app.use("/api/debug", debugRouter);
+}
+
 const startServer = async () => {
-  // ✅ Set up database connection FIRST (singleton pattern)
+  // ✅ Database connection happens AFTER routes are mounted (matches working example)
   try {
     await connectDB();
     console.log("✅ Database connected for main application");
   } catch (error) {
     console.error("❌ Failed to set up database connection:", error);
-    // Continue startup - individual routes will fail gracefully if DB needed
+    // Continue startup - routes will fail gracefully if DB needed
   }
 
-  // Import and mount routes AFTER database is connected
-  const { router: consultationRouter } = await import("./routes/consultations");
-  const { default: availabilityRouter } = await import("./routes/availability-simple");
-  const { router: scheduleRouter } = await import("./routes/schedule");
-  const { router: authRouter } = await import("./routes/auth");
-  const { router: calendarRouter } = await import("./routes/calendar");
-  const { router: icloudRouter } = await import("./routes/icloud");
-  const { router: googleRouter } = await import("./routes/google");
-  const { router: mergedRouter } = await import("./routes/merged");
-  const { router: cachedRouter } = await import("./routes/cached");
-  const { router: hoursRouter } = await import("./routes/hours");
-  const { router: settingsRouter } = await import("./routes/settings");
-  const { router: debugRouter } = await import("./routes/debug");
-  const { default: zoomRouter } = await import("./routes/zoom");
-  const { default: meetingsRouter } = await import("./routes/meetings");
-  const { default: pricingRouter } = await import("./routes/pricing");
-  console.log("✅ Pricing router imported");
-  const { default: clientRouter } = await import("./routes/client");
-  console.log("✅ Client router imported");
-  const { default: documentsRouter } = await import("./routes/documents");
-  console.log("✅ Documents router imported successfully");
-  const { default: subscriptionsRouter } = await import("./routes/subscriptions");
-  console.log("✅ Subscriptions router imported successfully");
-  const { default: invoicesRouter } = await import("./routes/invoices");
-  console.log("✅ Invoices router imported successfully");
-
-  // Mount all API routes AFTER database connection
-  app.use("/api/auth", authRouter);
-  app.use("/api/consultations", consultationRouter);
-  app.use("/api/availability", availabilityRouter);
-  app.use("/api/schedule", scheduleRouter);
-  app.use("/api/calendar", calendarRouter);
-  app.use("/api/icloud", icloudRouter);
-  app.use("/api/google", googleRouter);
-  app.use("/api/cached", cachedRouter);
-  app.use("/api/merged", mergedRouter);
-  app.use("/api/hours", hoursRouter);
-  app.use("/api/settings", settingsRouter);
-  app.use("/api/meetings", meetingsRouter);
-  app.use("/api/pricing", pricingRouter);
-  app.use("/api/client", clientRouter);
-  app.use("/api/client/documents", documentsRouter);
-  app.use("/api/subscriptions", subscriptionsRouter);
-  app.use("/api/invoices", invoicesRouter);
-  console.log("✅ Pricing router mounted at /api/pricing");
-  console.log("✅ Documents router mounted at /api/client/documents");
-  console.log("✅ Subscriptions router mounted at /api/subscriptions");
-  console.log("✅ Invoices router mounted at /api/invoices");
-  // Debug routes only in development
-  if (process.env.NODE_ENV !== "production") {
-    app.use("/api/debug", debugRouter);
+  // Initialize calendar cache (skip in serverless - too slow for cold starts)
+  if (!process.env["NETLIFY"]) {
+    try {
+      console.log("🚀 Starting calendar cache initialization...");
+      const { initializeCalendarCache, startBackgroundSync } = await import("./services/CalendarInitializer");
+      
+      console.log("📅 Calling initializeCalendarCache...");
+      await initializeCalendarCache();
+      console.log("✅ Calendar cache populated successfully");
+      
+      // Start background sync for ongoing updates
+      startBackgroundSync();
+    } catch (error) {
+      console.error("❌ Calendar cache initialization failed:", error);
+    }
   }
-  app.use("/api/zoom", zoomRouter);
-
-  // Initialize calendar cache immediately on startup
-  console.log("🚀 Starting calendar cache initialization...");
-  const { initializeCalendarCache, startBackgroundSync } = await import("./services/CalendarInitializer");
-
-  // Populate cache with all existing events on startup
-  try {
-    console.log("📅 Calling initializeCalendarCache...");
-    await initializeCalendarCache();
-    console.log("✅ Calendar cache populated successfully");
-  } catch (error) {
-    console.error("❌ Calendar cache initialization failed:", error);
-    // Continue startup even if cache init fails
-  }
-
-  // Start background sync for ongoing updates
-  startBackgroundSync();
 
   if (process.env && process.env["VITE"]) {
     // If running in dev, just run the server from vite, vite plugin to run express is used (SEE vite.config.ts)
