@@ -1,6 +1,6 @@
 [build]
   publish = "dist/client"
-  command = "npm run build"
+  command = "npm install && npm run build"
 
 [build.environment]
   NODE_VERSION = "23.9.0"
