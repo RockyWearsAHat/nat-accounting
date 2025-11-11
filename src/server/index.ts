@@ -114,11 +114,11 @@ const startServer = async () => {
     try {
       console.log("🚀 Starting calendar cache initialization...");
       const { initializeCalendarCache, startBackgroundSync } = await import("./services/CalendarInitializer");
-      
+
       console.log("📅 Calling initializeCalendarCache...");
       await initializeCalendarCache();
       console.log("✅ Calendar cache populated successfully");
-      
+
       // Start background sync for ongoing updates
       startBackgroundSync();
     } catch (error) {
