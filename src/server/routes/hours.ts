@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { BusinessHoursModel } from "../models/BusinessHours.js";
-import { requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 
 interface DayHours {
   raw: string;
@@ -84,7 +84,7 @@ router.get("/", async (_req, res) => {
 });
 
 // GET /api/hours/admin - Get all business hours with full details (admin only)
-router.get("/admin", requireAdmin, async (_req, res) => {
+router.get("/admin", requireAuth, requireAdmin, async (_req, res) => {
   try {
     const hours = await BusinessHoursModel.find().sort({ dayOfWeek: 1 });
     res.json({ ok: true, hours });
@@ -95,7 +95,7 @@ router.get("/admin", requireAdmin, async (_req, res) => {
 });
 
 // PUT /api/hours/admin/:day - Update business hours for a specific day (admin only)
-router.put("/admin/:day", requireAdmin, async (req, res) => {
+router.put("/admin/:day", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { day } = req.params;
     const { displayFormat, isClosed } = req.body;
@@ -153,7 +153,7 @@ router.put("/admin/:day", requireAdmin, async (req, res) => {
 });
 
 // POST /api/hours/admin/init - Initialize default hours (admin only, one-time use)
-router.post("/admin/init", requireAdmin, async (_req, res) => {
+router.post("/admin/init", requireAuth, requireAdmin, async (_req, res) => {
   try {
     const existingCount = await BusinessHoursModel.countDocuments();
     if (existingCount > 0) {
