@@ -47,6 +47,17 @@ app.use(cookieParser());
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
+// 🔥 CRITICAL: Ensure database connection before processing any API request (serverless requirement)
+app.use("/api", async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error("❌ Database connection failed:", error);
+    res.status(503).json({ error: "Service temporarily unavailable - database connection failed" });
+  }
+});
+
 // Health check endpoint
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
