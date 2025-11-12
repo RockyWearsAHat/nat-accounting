@@ -47,7 +47,7 @@ const router = Router();
 router.get("/", async (_req, res) => {
   try {
     const hours = await BusinessHoursModel.find().sort({ dayOfWeek: 1 }).lean();
-    
+
     // If no hours in database, return default hours
     if (!hours || hours.length === 0) {
       const defaultHours: Record<string, DayHours> = {
@@ -127,7 +127,7 @@ router.put("/admin/:day", requireAdmin, async (req, res) => {
 
       // Extract open/close times from display format
       const [openTime, closeTime] = displayFormat.split("-").map((t: string) => t.trim());
-      
+
       updateData = {
         ...updateData,
         displayFormat,
@@ -171,7 +171,7 @@ router.post("/admin/init", requireAdmin, async (_req, res) => {
     ];
 
     await BusinessHoursModel.insertMany(defaultHours);
-    
+
     res.json({ ok: true, message: "Business hours initialized successfully" });
   } catch (error) {
     console.error("Error initializing business hours:", error);
