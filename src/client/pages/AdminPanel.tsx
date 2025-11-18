@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { http } from '../lib/http';
 import { WeeklyCalendar } from '../components/WeeklyCalendar';
-import styles from '../components/calendar.module.css';
+import calStyles from '../components/calendar.module.css';
+import styles from './AdminPanel.module.css';
 import { ScheduleAppointmentModal } from '../components/ScheduleAppointmentModal';
 import { MeetingsSection } from '../components/MeetingsSection';
 import { CalendarEventsProvider } from '../contexts/CalendarEventsContext';
@@ -17,33 +18,39 @@ interface CalendarConfig { calendars:any[]; whitelist:string[]; busyEvents?:stri
 const CalendarSettings: React.FC<{ config:CalendarConfig|null; onBusyToggle:(url:string)=>void; onColor:(u:string,c:string)=>void; }> = ({ config, onBusyToggle, onColor }) => {
   if (!config) return <p className={styles.smallMuted}>Loading config…</p>;
   return (
-    <div className={styles.settingsBlock}>
-      <h4>Calendar Settings</h4>
+    <div className={styles.settingsCard}>
+      <h3>Calendar Configuration</h3>
+      <h4>Connected Calendars</h4>
       <div className={styles.calendarsWrap}>
         {config.calendars.map(cal => (
           <div key={cal.url} className={styles.calendarChip}>
             <input type='checkbox' checked={cal.busy} onChange={()=>onBusyToggle(cal.url)} />
             <span className={styles.calName}>{cal.displayName}</span>
             <input type='color' value={config.colors?.[cal.url] || '#ff3333'} onChange={e=>onColor(cal.url,e.target.value)} />
-            <span className={styles.statusTag}>{cal.busy ? 'blocking' : 'hidden'}</span>
+            <span className={styles.statusTag} data-status={cal.busy ? 'blocking' : 'hidden'}>
+              {cal.busy ? 'blocking' : 'hidden'}
+            </span>
           </div>
         ))}
       </div>
       <div className={styles.uidGroups}>
         <div>
-          <strong>Whitelisted</strong>
+          <strong>Whitelisted Events</strong>
           <div className={styles.uidList}>
             {config.whitelist.length ? config.whitelist.map(u=> <code key={u}>{u}</code>) : <span className={styles.muted}>None</span>}
           </div>
         </div>
         <div>
-          <strong>Force Busy</strong>
+          <strong>Force Busy Events</strong>
           <div className={styles.uidList}>
             {(config.busyEvents||[]).length ? (config.busyEvents||[]).map(u=> <code key={u}>{u}</code>) : <span className={styles.muted}>None</span>}
           </div>
         </div>
       </div>
-      <p className={styles.helpText}>Whitelist removes blocking; Force Busy marks event blocking even if calendar not busy.</p>
+      <p className={styles.helpText}>
+        💡 <strong>Whitelist</strong> removes blocking status from specific events. 
+        <strong>Force Busy</strong> marks events as blocking even if their calendar isn't set to busy.
+      </p>
     </div>
   );
 };
@@ -195,54 +202,55 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
   };
 
   return (
-    <div className={styles.adminLayout}>
-      <div className={styles.headerRow}>
-        <h2>Admin Dashboard</h2>
-        <button onClick={onLogout} className={styles.btnSecondary}>Logout</button>
+    <div className={styles.adminContainer}>
+      {/* Header */}
+      <div className={styles.header}>
+        <h1 className={styles.headerTitle}>Admin Dashboard</h1>
+        <p className={styles.headerSubtitle}>Manage your business operations & client services</p>
       </div>
 
-      {/* Tab Navigation */}
-      <div className={styles.tabs}>
+      {/* Tab Navigation - Neobrutalism Style */}
+      <div className={styles.tabNav}>
         <button
           className={`${styles.tab} ${activeTab === "calendar" ? styles.tabActive : ""}`}
           onClick={() => setActiveTab("calendar")}
         >
-          Calendar
+          📅 Calendar
         </button>
         <button
           className={`${styles.tab} ${activeTab === "meetings" ? styles.tabActive : ""}`}
           onClick={() => setActiveTab("meetings")}
         >
-          Meetings
+          🤝 Meetings
         </button>
         <button
           className={`${styles.tab} ${activeTab === "documents" ? styles.tabActive : ""}`}
           onClick={() => setActiveTab("documents")}
         >
-          Documents
+          📄 Documents
         </button>
         <button
           className={`${styles.tab} ${activeTab === "pricing" ? styles.tabActive : ""}`}
           onClick={() => setActiveTab("pricing")}
         >
-          Pricing
+          💰 Pricing
         </button>
         <button
           className={`${styles.tab} ${activeTab === "settings" ? styles.tabActive : ""}`}
           onClick={() => setActiveTab("settings")}
         >
-          Settings
+          ⚙️ Settings
         </button>
       </div>
 
       {/* Tab Content */}
-      <div className={styles.content}>
+      <div className={styles.tabContent}>
         {/* Calendar Tab */}
         {activeTab === "calendar" && (
-          <div className={styles.tabContent}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+          <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-xl)' }}>
               <button className={styles.btnPrimary} onClick={() => setShowScheduleModal(true)}>
-                + Schedule Appointment
+                ➕ Schedule Appointment
               </button>
             </div>
             <ScheduleAppointmentModal
@@ -258,11 +266,11 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
               }}
             />
             <CalendarEventsProvider>
-              <div className={styles.sectionCard}>
-                <h4>Calendar Display</h4>
+              <div className={styles.settingsCard}>
+                <h3>📅 Calendar Display</h3>
               </div>
               
-              <div className={styles.calendarWrapper}>
+              <div style={{ marginTop: 'var(--space-xl)' }}>
                 <WeeklyCalendar 
                   config={config} 
                   hours={hours} 
@@ -271,7 +279,7 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
                 />
               </div>
             </CalendarEventsProvider>
-          </div>
+          </>
         )}
 
         {/* Meetings Tab */}
@@ -299,8 +307,12 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
         {/* Pricing Tab */}
         {activeTab === "pricing" && (
           <div className={styles.tabContent}>
-            <PricingCalculatorAdmin />
-            <div style={{ marginTop: "3rem", borderTop: "2px solid #333", paddingTop: "2rem" }}>
+            <div className={styles.settingsCard}>
+              <h3>💰 Pricing Calculator</h3>
+              <PricingCalculatorAdmin />
+            </div>
+            <div className={styles.settingsCard} style={{ marginTop: "var(--space-xl)" }}>
+              <h3>📋 Subscription Management</h3>
               <SubscriptionManager />
             </div>
           </div>
@@ -309,16 +321,17 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
         {/* Settings Tab */}
         {activeTab === "settings" && (
           <div className={styles.tabContent}>
-            <div className={styles.sectionCard}>
-              <h4>Google Calendar Integration</h4>
+            {/* Google Calendar Integration */}
+            <div className={styles.settingsCard}>
+              <h3>🔗 Google Calendar Integration</h3>
               {googleStatus?.connected ? (
                 (() => {
                   const expired = googleStatus.expires && new Date(googleStatus.expires).getTime() < Date.now();
                   if (expired) {
                     return (
                       <>
-                        <p className={styles.mutedSmall}>
-                          Token expired ({googleStatus.expires && new Date(googleStatus.expires).toLocaleString()}).
+                        <p className={styles.smallMuted}>
+                          ⚠️ Token expired ({googleStatus.expires && new Date(googleStatus.expires).toLocaleString()})
                         </p>
                         <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.btnPrimary}>
                           {connectingGoogle ? 'Redirecting…' : 'Reauthorize Google Calendar'}
@@ -328,27 +341,42 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
                   }
                   return (
                     <>
-                      <p className={styles.mutedSmall}>Connected. Tokens stored for admin user{googleStatus.expires && ` (exp: ${new Date(googleStatus.expires).toLocaleString()})`}.</p>
-                      <button onClick={loadConfig} className={styles.btnSecondary}>Reload Google Calendars</button>
+                      <p className={styles.smallMuted}>
+                        ✅ Connected. Tokens stored for admin user
+                        {googleStatus.expires && ` (expires: ${new Date(googleStatus.expires).toLocaleString()})`}
+                      </p>
+                      <button onClick={loadConfig} className={styles.btnSecondary}>
+                        Reload Google Calendars
+                      </button>
                     </>
                   );
                 })()
               ) : (
-                <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.navButton}>{connectingGoogle? 'Redirecting…':'Connect Google Calendar'}</button>
+                <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.btnPrimary}>
+                  {connectingGoogle? 'Redirecting…':'Connect Google Calendar'}
+                </button>
               )}
             </div>
-            <div className={styles.siteSettings}>
-              <h3>Site Settings</h3>
+            
+            {/* Site Settings */}
+            <div className={styles.settingsCard}>
+              <h3>⚙️ Site Settings</h3>
               {settings && availableTimezones.length>0 && (
-                <div className={styles.timezoneRow}>
-                  <label>Timezone</label>
-                  <select value={settings.timezone} onChange={e=> http.post<any>('/api/settings',{ timezone:e.target.value}).then(r=> setSettings(r.settings))}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Timezone</label>
+                  <select 
+                    className={styles.formSelect}
+                    value={settings.timezone} 
+                    onChange={e=> http.post<any>('/api/settings',{ timezone:e.target.value}).then(r=> setSettings(r.settings))}
+                  >
                     {availableTimezones.map(t=> <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
-                  <span className={styles.mutedSmall}>Events display in this timezone.</span>
+                  <p className={styles.smallMuted}>Events will display in this timezone</p>
                 </div>
               )}
             </div>
+            
+            {/* Calendar Configuration */}
             <CalendarSettings config={config} onBusyToggle={toggleCalendarBusy} onColor={updateCalendarColor} />
           </div>
         )}

@@ -1,0 +1,698 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { NorthStarLogo } from '../components/NorthStarLogo';
+import styles from './NewHome.module.css';
+
+gsap.registerPlugin(ScrollTrigger);
+
+const NewHome: React.FC = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    message: ''
+  });
+
+  // Refs for animation
+  const heroRef = useRef<HTMLElement>(null);
+  const servicesRef = useRef<HTMLElement>(null);
+  const navbarRef = useRef<HTMLElement>(null);
+  const heroLogoRef = useRef<HTMLDivElement>(null);
+  const heroTextRef = useRef<HTMLDivElement>(null);
+  const illuminateRef = useRef<HTMLSpanElement>(null);
+  const financialRef = useRef<HTMLParagraphElement>(null);
+  const subtitleRef = useRef<HTMLParagraphElement>(null);
+  const formContainerRef = useRef<HTMLDivElement>(null);
+  const formInputRefs = useRef<(HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | null)[]>([]);
+  // Individual form input refs for art piece animation
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const companyInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const serviceCardsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const scrollHintRef = useRef<HTMLDivElement>(null);
+  const inactivityTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!heroRef.current || !servicesRef.current || !heroTextRef.current || !heroLogoRef.current) return;
+
+    // Set initial states for all elements to prevent flash
+    gsap.set(heroLogoRef.current, {
+      opacity: 0
+    });
+
+    // Set text elements to visible with gradient at start position
+    gsap.set([illuminateRef.current, financialRef.current, subtitleRef.current], {
+      opacity: 1
+    });
+
+    // Set form container to start below viewport
+    gsap.set(formContainerRef.current, {
+      y: '120%'
+    });
+
+    // Set inputs with visible staggered offsets (16px increments for clear visual effect)
+    gsap.set(nameInputRef.current, { y: 'calc(120% + 16px)' });
+    gsap.set(emailInputRef.current, { y: 'calc(120% + 32px)' });
+    gsap.set(phoneInputRef.current, { y: 'calc(120% + 48px)' });
+    gsap.set(companyInputRef.current, { y: 'calc(120% + 64px)' });
+    gsap.set(messageInputRef.current, { y: 'calc(120% + 80px)' });
+    gsap.set(buttonRef.current, { y: 'calc(120% + 96px)' });
+
+    // Set scroll hint to invisible initially
+    if (scrollHintRef.current) {
+      gsap.set(scrollHintRef.current, { opacity: 0, y: -10 });
+    }
+
+    // Set 3D transform properties for form inputs (art piece on strings effect)
+    gsap.set([nameInputRef.current, emailInputRef.current, phoneInputRef.current, 
+              companyInputRef.current, messageInputRef.current, buttonRef.current], {
+      transformPerspective: 1000,
+      transformStyle: 'preserve-3d'
+    });
+
+    // Calculate the position to move the logo behind the text
+    const heroRect = heroRef.current.getBoundingClientRect();
+    const textRect = heroTextRef.current.getBoundingClientRect();
+    const logoRect = heroLogoRef.current.getBoundingClientRect();
+    
+    // Calculate how much to move from center to behind text
+    const targetX = (textRect.left + textRect.width / 2) - (heroRect.left + heroRect.width / 2);
+    const targetY = (textRect.top + textRect.height / 2) - (heroRect.top + heroRect.height / 2);
+
+    // Create scroll-controlled timeline for hero section
+    // Pin during animation with extended scroll distance
+    const heroTimeline = gsap.timeline({
+      scrollTrigger: {
+        trigger: heroRef.current,
+        start: 'top top',
+        end: '+=100%',            // 100vh for main animation
+        scrub: true,              // true = instant 1:1 scroll mapping (no delay)
+        pin: true,
+        pinSpacing: true,
+        anticipatePin: 0.5,
+        fastScrollEnd: true,
+        onUpdate: (self) => {
+          // Hide scroll hint when user starts scrolling
+          if (scrollHintRef.current && self.progress > 0.01) {
+            gsap.to(scrollHintRef.current, { opacity: 0, duration: 0.3 });
+            if (inactivityTimerRef.current) {
+              window.clearTimeout(inactivityTimerRef.current);
+              inactivityTimerRef.current = null;
+            }
+          }
+        }
+      }
+    });
+
+    // 1. Logo twist-in: scale up and roll 45º (0-7.5% of scroll timeline) - faster
+    heroTimeline.fromTo(heroLogoRef.current, 
+      {
+        scale: 0,
+        rotation: 45,
+        opacity: 1,
+        x: 0
+      },
+      {
+        scale: 1,
+        rotation: 0,
+        opacity: 0.08, // Fade to background opacity during the bounce
+        duration: 7.5, // Half the original duration for faster bounce
+        ease: 'power2.out' // Changed from back.out to prevent opacity overshoot
+      }
+    )
+    // Additional animation for scale with bounce (parallel to above, just for scale)
+    .to(heroLogoRef.current, {
+      scale: 1,
+      duration: 0.01,
+      ease: 'back.out(1.7)' // Apply bounce only to scale
+    }, 7.5)
+    // 1b. Hold in place (7.5-15%)
+    .to({}, { duration: 7.49 }) // Hold in place with background opacity
+    // 2. Roll another 90º and move left to center behind text (15-25%) - NO opacity change
+    .to(heroLogoRef.current, {
+      rotation: -90,
+      x: targetX,
+      y: targetY,
+      scale: 1.4,
+      duration: 10,
+      ease: 'power2.inOut'
+    }, '<') // Start at same time as previous to ensure no gap
+    // 3. Reveal "Illuminate Every" left to right with gradient mask (25-40%)
+    .fromTo(illuminateRef.current, 
+      {
+        backgroundPosition: '100% 0%'
+      },
+      {
+        backgroundPosition: '0% 0%',
+        duration: 15,
+        ease: 'power2.inOut'
+      }
+    )
+    // 4. Reveal "Financial Decision" top to bottom with gradient mask (35-50%)
+    .fromTo(financialRef.current,
+      {
+        backgroundPosition: '0% 100%'
+      },
+      {
+        backgroundPosition: '0% 0%',
+        duration: 15,
+        ease: 'power2.inOut'
+      },
+      '-=8' // Overlap with previous by 8 units
+    )
+    // 5. Reveal subtitle diagonally top-left to bottom-right (50-60%)
+    .fromTo(subtitleRef.current, {
+      backgroundPosition: '100% 100%'
+    }, {
+      backgroundPosition: '0% 0%',
+      duration: 10
+    }, '-=5')
+    // 6. Form "pulled up by strings" - staggered start → aligned finish (with staggered timing)
+    // Elements start with gaps, land at y:0 (no gaps) one after another
+    .add('formStart', '-=5')
+    .fromTo(formContainerRef.current, {
+      y: '120%'
+    }, {
+      y: 0,
+      duration: 8,
+      ease: 'none'
+    }, 'formStart')  // Form lands first at formStart + 8
+    .fromTo(nameInputRef.current, { 
+      y: 'calc(120% + 16px)'
+    }, { 
+      y: 0,  // Aligns with form (no gap)
+      duration: 8,
+      ease: 'none'
+    }, 'formStart+=0.5')  // Lands 0.5 scroll units after form
+    .fromTo(emailInputRef.current, { 
+      y: 'calc(120% + 32px)'
+    }, { 
+      y: 0,
+      duration: 8,
+      ease: 'none'
+    }, 'formStart+=1')  // Lands 1 scroll unit after form
+    .fromTo(phoneInputRef.current, { 
+      y: 'calc(120% + 48px)'
+    }, { 
+      y: 0,
+      duration: 8,
+      ease: 'none'
+    }, 'formStart+=1.5')
+    .fromTo(companyInputRef.current, { 
+      y: 'calc(120% + 64px)'
+    }, { 
+      y: 0,
+      duration: 8,
+      ease: 'none'
+    }, 'formStart+=2')
+    .fromTo(messageInputRef.current, { 
+      y: 'calc(120% + 80px)'
+    }, { 
+      y: 0,
+      duration: 8,
+      ease: 'none'
+    }, 'formStart+=2.5')
+    .fromTo(buttonRef.current, { 
+      y: 'calc(120% + 96px)'
+    }, { 
+      y: 0,
+      duration: 8,
+      ease: 'none'
+    }, 'formStart+=3')  // Last element lands 3 scroll units after form
+    // Hold aligned (no gaps) until unpin
+    .to({}, { duration: 30 });
+
+    // Exit animation for form - only plays AFTER unpin when true scrolling occurs
+    const exitTl = gsap.timeline({
+      scrollTrigger: {
+        trigger: heroRef.current,
+        start: 'bottom bottom',
+        end: '+=65%',
+        scrub: true
+      }
+    });
+
+    // Exit: Pull from staggered positions with staggered timing
+    exitTl
+      .to(formContainerRef.current, { 
+        y: '-120%', 
+        duration: 8, 
+        ease: 'none' 
+      }, 0)  // Exits first at position 0
+      .to(nameInputRef.current, { 
+        y: 'calc(-120% - 8px)', 
+        duration: 8, 
+        ease: 'none' 
+      }, 0.5)  // Exits at position 0.5
+      .to(emailInputRef.current, { 
+        y: 'calc(-120% - 16px)', 
+        duration: 8, 
+        ease: 'none' 
+      }, 1)
+      .to(phoneInputRef.current, { 
+        y: 'calc(-120% - 24px)', 
+        duration: 8, 
+        ease: 'none' 
+      }, 1.5)
+      .to(companyInputRef.current, { 
+        y: 'calc(-120% - 32px)', 
+        duration: 8, 
+        ease: 'none' 
+      }, 2)
+      .to(messageInputRef.current, { 
+        y: 'calc(-120% - 40px)', 
+        duration: 8, 
+        ease: 'none' 
+      }, 2.5)
+      .to(buttonRef.current, { 
+        y: 'calc(-120% - 48px)', 
+        duration: 8, 
+        ease: 'none' 
+      }, 3);
+
+    // Scroll-triggered animations for service cards - instant scroll mapping, staggered appearance
+    serviceCardsRef.current.forEach((card, index) => {
+      if (card) {
+        const staggerOffset = index * 3;  // 3% scroll offset between each card
+        gsap.fromTo(card, {
+          opacity: 0,
+          y: 30
+        }, {
+          opacity: 1,
+          y: 0,
+          ease: 'none',  // Linear - no easing curves
+          scrollTrigger: {
+            trigger: card,
+            start: `top ${92 - staggerOffset}%`,
+            end: `top ${77 - staggerOffset}%`,
+            scrub: true,  // true = instant 1:1 scroll mapping, no smoothing delay
+            invalidateOnRefresh: true
+          }
+        });
+      }
+    });
+
+    // Inactivity detection for scroll hint
+    const hideScrollHint = () => {
+      if (scrollHintRef.current) {
+        gsap.to(scrollHintRef.current, { opacity: 0, duration: 0.3 });
+      }
+      // Clear timer when user scrolls
+      if (inactivityTimerRef.current) {
+        window.clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+    };
+
+    // Show hint after 10 seconds if still at top of page
+    inactivityTimerRef.current = window.setTimeout(() => {
+      if (scrollHintRef.current && window.scrollY < 50) {
+        gsap.to(scrollHintRef.current, { 
+          opacity: 1, 
+          duration: 1,
+          ease: 'power2.inOut'
+        });
+      }
+    }, 10000);
+
+    // Listen for scroll events to hide hint
+    window.addEventListener('scroll', hideScrollHint);
+    window.addEventListener('wheel', hideScrollHint);
+    window.addEventListener('touchmove', hideScrollHint);
+
+    // Cleanup
+    return () => {
+      ScrollTrigger.getAll().forEach(trigger => trigger.kill());
+      if (inactivityTimerRef.current) {
+        window.clearTimeout(inactivityTimerRef.current);
+      }
+      window.removeEventListener('scroll', hideScrollHint);
+      window.removeEventListener('wheel', hideScrollHint);
+      window.removeEventListener('touchmove', hideScrollHint);
+    };
+  }, []);
+
+  // Cursor-following effect for service cards
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>, index: number) => {
+    const card = serviceCardsRef.current[index];
+    if (!card) return;
+
+    const rect = card.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    card.style.setProperty('--mouse-x', `${x}%`);
+    card.style.setProperty('--mouse-y', `${y}%`);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('Form submitted:', formData);
+    alert("Thank you! We'll contact you within 24 hours.");
+    setFormData({ name: '', email: '', phone: '', company: '', message: '' });
+  };
+
+  return (
+    <div className={styles.page}>
+      {/* Hero Section */}
+      <section ref={heroRef} className={styles.hero}>
+        {/* Logo watermark behind content - starts large and centered */}
+        <div ref={heroLogoRef} className={styles.heroLogoWatermark}>
+          <NorthStarLogo size={700} color="rgba(174, 191, 190, 0.06)" />
+        </div>
+
+        {/* Scroll hint - appears after 10s of inactivity */}
+        <div ref={scrollHintRef} className={styles.scrollHint}>
+          <span className={styles.scrollHintText}>Scroll down to explore</span>
+          <svg className={styles.scrollHintArrow} width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        
+        <div className={styles.heroContent}>
+          <div ref={heroTextRef} className={styles.heroText}>
+            <h1 className={styles.heroTitle}>
+              <span ref={illuminateRef} className={styles.heroTitleIlluminate}>
+                Illuminate Every
+              </span>{' '}
+              <span ref={financialRef} className={styles.heroTitleAccent}>
+                Financial Decision
+              </span>
+            </h1>
+            <p ref={subtitleRef} className={styles.heroSubtitle}>
+              Strategic financial guidance for growing businesses. Transform your numbers into clarity, control, and confident decisions.
+            </p>
+          </div>
+
+          <div ref={formContainerRef} className={styles.heroFormContainer}>
+            <h3 className={styles.heroFormTitle}>Book Free Consultation</h3>
+            <form className={styles.heroForm} onSubmit={handleSubmit}>
+              <input
+                ref={nameInputRef}
+                type="text"
+                placeholder="Your Name"
+                className={styles.heroFormInput}
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+              <input
+                ref={emailInputRef}
+                type="email"
+                placeholder="Email Address"
+                className={styles.heroFormInput}
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+              />
+              <input
+                ref={phoneInputRef}
+                type="tel"
+                placeholder="Phone Number"
+                className={styles.heroFormInput}
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                required
+              />
+              <input
+                ref={companyInputRef}
+                type="text"
+                placeholder="Company Name"
+                className={styles.heroFormInput}
+                value={formData.company}
+                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+              />
+              <textarea
+                ref={messageInputRef}
+                placeholder="What can we help you with?"
+                className={styles.heroFormTextarea}
+                value={formData.message}
+                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+              />
+              <button ref={buttonRef} type="submit" className={styles.heroFormButton}>
+                Get Started
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      {/* Sticky Navbar - positioned to stick when services section scrolls into view */}
+      <nav ref={navbarRef} className={styles.navbar}>
+        <div className={styles.navContainer}>
+          <div className={styles.navBrand}>
+            <NorthStarLogo size={38} color="#5a6f5a" />
+            <span className={styles.navBrandText}>
+              Lumina Strategy Group
+            </span>
+          </div>
+
+          <div className={styles.navLinks}>
+            {['Services', 'About', 'Contact'].map((item) => (
+              <a
+                key={item}
+                href={`#${item.toLowerCase()}`}
+                className={styles.navLink}
+              >
+                {item}
+              </a>
+            ))}
+          </div>
+
+          <button
+            onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })}
+            className={styles.navButton}
+          >
+            Get Started
+          </button>
+        </div>
+      </nav>
+
+      {/* Services Section */}
+      <section ref={servicesRef} id="services" className={styles.services}>
+        <div className={styles.servicesContainer}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionLabel}>What We Do</div>
+            <h2 className={styles.sectionTitle}>Comprehensive Financial Services</h2>
+            <p className={styles.sectionDescription}>
+              Specializing in internal controls, systems implementation, and financial analytics for manufacturing and retail businesses
+            </p>
+          </div>
+
+          <div className={styles.servicesGrid}>
+            {[
+              {
+                title: 'Internal Controls & Compliance',
+                description: 'Robust internal control frameworks to protect your assets and ensure regulatory compliance.',
+                features: ['Control Design', 'Risk Assessment', 'Compliance Audits']
+              },
+              {
+                title: 'Systems Implementation',
+                description: 'QuickBooks, Power BI, and automation solutions that streamline operations and eliminate manual work.',
+                features: ['QuickBooks Setup', 'Power BI Dashboards', 'Process Automation']
+              },
+              {
+                title: 'Financial Analytics',
+                description: 'Data-driven insights that illuminate trends, optimize margins, and drive strategic decisions.',
+                features: ['KPI Tracking', 'Margin Analysis', 'Predictive Analytics']
+              },
+              {
+                title: 'Bookkeeping & Reconciliation',
+                description: 'Accurate monthly bookkeeping, reconciliations, and financial statements you can trust.',
+                features: ['Monthly Close', 'Account Reconciliation', 'Financial Reporting']
+              },
+              {
+                title: 'Strategic Advisory',
+                description: 'CFO-level guidance on pricing, forecasting, and growth strategy for scaling businesses.',
+                features: ['Financial Strategy', 'Growth Planning', 'Pricing Architecture']
+              },
+              {
+                title: 'AR/AP Management',
+                description: 'Complete accounts receivable and payable management with dedicated support.',
+                features: ['Invoice Management', 'Payment Processing', 'Vendor Relations']
+              }
+            ].map((service, i) => (
+              <div 
+                key={i} 
+                ref={(el) => serviceCardsRef.current[i] = el}
+                className={styles.serviceCard}
+                onMouseMove={(e) => handleMouseMove(e, i)}
+              >
+                <h3 className={styles.serviceTitle}>{service.title}</h3>
+                <p className={styles.serviceDescription}>{service.description}</p>
+                <ul className={styles.serviceFeatures}>
+                  {service.features.map((feature, fi) => (
+                    <li key={fi} className={styles.serviceFeature}>{feature}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className={styles.about}>
+        <div className={styles.aboutContainer}>
+        <div className={styles.aboutImage}>
+          <NorthStarLogo size={180} color="rgba(174, 191, 190, 0.3)" />
+        </div>          <div className={styles.aboutContent}>
+            <div className={styles.sectionLabel}>Meet the Founder</div>
+            <h2 className={styles.sectionTitle}>Natasha Mayr</h2>
+
+            <p className={styles.aboutText}>
+              Lumina Strategy Group exists because growing businesses are overwhelmed by disorganized financial systems, unclear numbers, and a lack of strategic guidance—preventing them from making confident, data-driven decisions.
+            </p>
+
+            <p className={styles.aboutTextSecondary}>
+              With deep experience in manufacturing and retail, plus a background at Deloitte, Natasha brings technical expertise and strategic insight to help businesses scale with confidence.
+            </p>
+
+            <div className={styles.credentialsGrid}>
+              {[
+                { label: 'Education', value: 'B.S. Accounting\nUniversity of Utah' },
+                { label: 'Experience', value: 'Audit & Assurance\nDeloitte LLP' },
+                { label: 'Specialization', value: 'Manufacturing\nRetail' },
+                { label: 'Expertise', value: 'QuickBooks, Power BI\nFinancial Analytics' }
+              ].map((item, i) => (
+                <div key={i} className={styles.credentialItem}>
+                  <div className={styles.credentialLabel}>{item.label}</div>
+                  <div className={styles.credentialValue}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.quote}>
+              <p className={styles.quoteText}>
+                "I believe that when business owners truly understand their numbers, they unlock their potential—and that's what Lumina is all about."
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section id="contact" className={styles.contact}>
+        <div className={styles.contactContainer}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionLabel}>Get In Touch</div>
+            <h2 className={styles.sectionTitle}>Let's Work Together</h2>
+            <p className={styles.sectionDescription}>
+              Schedule a free consultation to discuss your financial needs
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.formGrid}>
+              <div className={styles.formRow}>
+                <input
+                  type="text"
+                  placeholder="Your Name *"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className={styles.input}
+                />
+                <input
+                  type="email"
+                  placeholder="Email *"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className={styles.input}
+                />
+              </div>
+
+              <div className={styles.formRow}>
+                <input
+                  type="tel"
+                  placeholder="Phone *"
+                  required
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className={styles.input}
+                />
+                <input
+                  type="text"
+                  placeholder="Company"
+                  value={formData.company}
+                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                  className={styles.input}
+                />
+              </div>
+
+              <textarea
+                placeholder="Tell us about your needs..."
+                required
+                value={formData.message}
+                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                className={styles.textarea}
+              />
+
+              <button type="submit" className={styles.submitButton}>
+                Send Message
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className={styles.footer}>
+        <div className={styles.footerContainer}>
+          <div className={styles.footerGrid}>
+            <div className={styles.footerColumn}>
+              <div className={styles.footerBrand}>
+                <NorthStarLogo size={48} color="#798C8C" />
+              </div>
+              <div className={styles.footerBrandText}>
+                Lumina Strategy Group
+              </div>
+              <p className={styles.footerDescription}>
+                Strategic financial guidance for growing businesses. Illuminate every decision.
+              </p>
+            </div>
+
+            <div className={styles.footerColumn}>
+              <h4 className={styles.footerTitle}>Quick Links</h4>
+              <div className={styles.footerLinks}>
+                {['Services', 'About', 'Contact'].map((link) => (
+                  <a
+                    key={link}
+                    href={`#${link.toLowerCase()}`}
+                    className={styles.footerLink}
+                  >
+                    {link}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.footerColumn}>
+              <h4 className={styles.footerTitle}>Contact</h4>
+              <div className={styles.footerContact}>
+                mayrconsultingservices@gmail.com
+              </div>
+              <div className={styles.footerContactSecondary}>
+                Serving manufacturing & retail businesses
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.footerBottom}>
+            <p className={styles.copyright}>
+              © 2025 Lumina Strategy Group. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default NewHome;

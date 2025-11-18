@@ -80,77 +80,166 @@ export const ConsultationForm: React.FC = () => {
   return (
     <form
       onSubmit={submit}
-      style={{ display: "grid", gap: "1rem", maxWidth: 800 }}
+      style={{ display: "grid", gap: "var(--space-lg)", width: "100%" }}
     >
-      <div style={grid2}>
-        {text("name", "text", "Name")}
-        {text("email", "email", "Email")}
+      {/* Basic Info Section */}
+      <div>
+        <h3 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--font-size-xl)",
+          fontWeight: "var(--font-weight-bold)",
+          color: "var(--color-text-primary)",
+          marginBottom: "var(--space-md)",
+          textTransform: "uppercase",
+          letterSpacing: "var(--letter-spacing-wide)"
+        }}>
+          Contact Information
+        </h3>
+        <div style={grid2}>
+          {text("name", "text", "Full Name *")}
+          {text("email", "email", "Email Address *")}
+        </div>
+        <div style={grid2}>
+          {text("phone", "text", "Phone Number *")}
+          {text("company", "text", "Company Name *")}
+        </div>
+        {text("website", "text", "Website (optional)")}
       </div>
-      <div style={grid2}>
-        {text("phone", "text", "Phone")}
-        {text("company", "text", "Company")}
+      
+      {/* Business Details Section */}
+      <div>
+        <h3 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--font-size-xl)",
+          fontWeight: "var(--font-weight-bold)",
+          color: "var(--color-text-primary)",
+          marginBottom: "var(--space-md)",
+          textTransform: "uppercase",
+          letterSpacing: "var(--letter-spacing-wide)"
+        }}>
+          Business Details
+        </h3>
+        <div style={grid2}>
+          {text("dunsNumber", "text", "DUNS Number (optional)")}
+          {text("numberOfSubsidiaries", "number", "Number of Subsidiaries")}
+        </div>
+        <div style={grid3}>
+          {text("revenueApprox", "number", "Approx. Revenue (USD)")}
+          {text("transactionsPerMonth", "number", "Transactions / Month")}
+          {text("reconciliationAccounts", "number", "Accounts to Reconcile")}
+        </div>
       </div>
-      {text("website", "text", "Website (optional)")}
-      <div style={grid2}>
-        {text("dunsNumber", "text", "DUNS Number (optional)")}
-        {text("numberOfSubsidiaries", "number", "# Subsidiaries")}
+      
+      {/* Goals/Notes */}
+      <div>
+        <label style={{
+          display: "block",
+          fontWeight: "var(--font-weight-medium)",
+          fontSize: "var(--font-size-sm)",
+          color: "var(--color-text-secondary)",
+          marginBottom: "var(--space-sm)",
+          textTransform: "uppercase",
+          letterSpacing: "var(--letter-spacing-wide)"
+        }}>
+          Goals & Notes
+        </label>
+        <textarea
+          placeholder="Tell us about your goals and specific needs..."
+          value={form.goals || ""}
+          onChange={(e) => update({ goals: e.target.value })}
+          style={{ ...inputStyle, minHeight: 120, resize: "vertical", fontFamily: "var(--font-sans)" }}
+        />
       </div>
-      <div style={grid3}>
-        {text("revenueApprox", "number", "Revenue (USD)")}
-        {text("transactionsPerMonth", "number", "Transactions / month")}
-        {text("reconciliationAccounts", "number", "# Accounts to Reconcile")}
-      </div>
-      <textarea
-        placeholder="Goals / Notes"
-        value={form.goals || ""}
-        onChange={(e) => update({ goals: e.target.value })}
-        style={{ ...inputStyle, minHeight: 120, resize: "vertical" }}
-      />
+      
+      {/* Services Section */}
       <fieldset style={fieldsetStyle}>
-        <legend style={{ padding: "0 0.5rem" }}>Requested Services</legend>
+        <legend style={{ 
+          padding: "0 var(--space-md)",
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--font-size-xl)",
+          fontWeight: "var(--font-weight-bold)",
+          color: "var(--color-text-primary)",
+          textTransform: "uppercase",
+          letterSpacing: "var(--letter-spacing-wide)"
+        }}>
+          Requested Services
+        </legend>
         <div style={serviceGrid}>
-          <label>
-            <input type="checkbox" {...cb("wantsBookkeeping")} /> Bookkeeping
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsReconciliations")} />{" "}
-            Reconciliations
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsFinancials")} /> Financial
-            Statements
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsSoftwareImplementation")} />{" "}
-            Software Implementation
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsAdvisory")} /> Advisory
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsAR")} /> Accounts Receivable
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsAP")} /> Accounts Payable
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsForecasting")} /> Forecasting
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsCleanup")} /> Financial Clean-Up
-          </label>
-          <label>
-            <input type="checkbox" {...cb("wantsWebsiteHelp")} /> Website Help
-          </label>
+          {[
+            { key: "wantsBookkeeping", label: "📊 Bookkeeping" },
+            { key: "wantsReconciliations", label: "✅ Reconciliations" },
+            { key: "wantsFinancials", label: "📈 Financial Statements" },
+            { key: "wantsSoftwareImplementation", label: "💻 Software Setup" },
+            { key: "wantsAdvisory", label: "🎯 Advisory Services" },
+            { key: "wantsAR", label: "💳 Accounts Receivable" },
+            { key: "wantsAP", label: "💰 Accounts Payable" },
+            { key: "wantsForecasting", label: "🔮 Cash Flow Forecasting" },
+            { key: "wantsCleanup", label: "🧹 Financial Clean-Up" },
+            { key: "wantsWebsiteHelp", label: "🌐 Website Assistance" }
+          ].map(service => (
+            <label key={service.key} style={checkboxLabel}>
+              <input 
+                type="checkbox" 
+                {...cb(service.key as keyof FormState)} 
+                style={checkboxStyle}
+              />
+              <span>{service.label}</span>
+            </label>
+          ))}
         </div>
       </fieldset>
-      <button disabled={submitting} style={buttonStyle}>
-        {submitting ? "Submitting..." : "Submit Consultation"}
+      
+      {/* Submit Button */}
+      <button 
+        disabled={submitting} 
+        style={{
+          ...buttonStyle,
+          opacity: submitting ? 0.6 : 1,
+          cursor: submitting ? "not-allowed" : "pointer"
+        }}
+        onMouseEnter={(e) => {
+          if (!submitting) {
+            (e.target as HTMLButtonElement).style.transform = "translate(-3px, -3px)";
+            (e.target as HTMLButtonElement).style.boxShadow = "8px 8px 0 var(--color-text-primary)";
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!submitting) {
+            (e.target as HTMLButtonElement).style.transform = "translate(0, 0)";
+            (e.target as HTMLButtonElement).style.boxShadow = "5px 5px 0 var(--color-text-primary)";
+          }
+        }}
+      >
+        {submitting ? "SUBMITTING..." : "SUBMIT CONSULTATION REQUEST"}
       </button>
-      {status && <div style={{ fontSize: 14 }}>{status}</div>}
-      <p style={{ fontSize: 12, opacity: 0.7 }}>
-        We do not display pricing publicly. A tailored estimate will be prepared
-        after review.
+      
+      {/* Status Message */}
+      {status && (
+        <div style={{ 
+          padding: "var(--space-md)",
+          background: status.includes("Submitted") 
+            ? "var(--color-success)" 
+            : "var(--color-error)",
+          color: "var(--color-text-inverse)",
+          border: "var(--border-width-medium) solid var(--color-text-primary)",
+          borderRadius: "var(--radius-sm)",
+          fontWeight: "var(--font-weight-bold)",
+          textAlign: "center"
+        }}>
+          {status}
+        </div>
+      )}
+      
+      {/* Disclaimer */}
+      <p style={{ 
+        fontSize: "var(--font-size-sm)", 
+        color: "var(--color-text-tertiary)",
+        textAlign: "center",
+        fontStyle: "italic",
+        lineHeight: "var(--line-height-relaxed)"
+      }}>
+        💡 Pricing is customized based on your specific needs. 
+        A tailored estimate will be prepared after our initial consultation.
       </p>
     </form>
   );
@@ -158,40 +247,78 @@ export const ConsultationForm: React.FC = () => {
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "0.75rem 1rem",
-  background: "#111",
-  border: "1px solid #222",
-  color: "#fff",
-  borderRadius: 2,
-  fontSize: 14,
+  padding: "var(--space-md)",
+  background: "var(--color-bg-tertiary)",
+  border: "var(--border-width-medium) solid var(--border-color-subtle)",
+  color: "var(--color-text-primary)",
+  borderRadius: "var(--radius-sm)",
+  fontSize: "var(--font-size-base)",
+  transition: "all var(--transition-fast)",
+  outline: "none",
 };
+
 const fieldsetStyle: React.CSSProperties = {
-  border: "1px solid #222",
-  padding: "1rem",
-  background: "#0b0b0b",
+  border: "var(--border-width-thick) solid var(--border-color-primary)",
+  padding: "var(--space-xl)",
+  background: "var(--color-bg-elevated)",
+  borderRadius: "var(--radius-sm)",
+  boxShadow: "3px 3px 0 var(--border-color-primary)",
 };
+
 const serviceGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
-  gap: "0.5rem",
-  fontSize: 13,
+  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+  gap: "var(--space-md)",
+  marginTop: "var(--space-lg)"
 };
-const buttonStyle: React.CSSProperties = {
-  background: "#fff",
-  color: "#000",
-  padding: "0.9rem 1.5rem",
-  border: "none",
-  fontWeight: 600,
+
+const checkboxLabel: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "var(--space-sm)",
+  fontSize: "var(--font-size-sm)",
+  color: "var(--color-text-secondary)",
   cursor: "pointer",
-  letterSpacing: "0.05em",
+  padding: "var(--space-sm)",
+  background: "var(--color-bg-tertiary)",
+  border: "var(--border-width-thin) solid var(--border-color-subtle)",
+  borderRadius: "var(--radius-sm)",
+  transition: "all var(--transition-fast)",
 };
+
+const checkboxStyle: React.CSSProperties = {
+  width: 18,
+  height: 18,
+  cursor: "pointer",
+  accentColor: "var(--color-accent-blue)"
+};
+
+const buttonStyle: React.CSSProperties = {
+  background: "var(--color-accent-blue)",
+  color: "var(--color-text-inverse)",
+  padding: "var(--space-lg) var(--space-2xl)",
+  border: "var(--border-width-thick) solid var(--color-text-primary)",
+  fontFamily: "var(--font-display)",
+  fontWeight: "var(--font-weight-bold)",
+  fontSize: "var(--font-size-base)",
+  cursor: "pointer",
+  letterSpacing: "var(--letter-spacing-wider)",
+  textTransform: "uppercase",
+  borderRadius: "var(--radius-brutal)",
+  boxShadow: "5px 5px 0 var(--color-text-primary)",
+  transition: "all var(--transition-fast)",
+};
+
 const grid2: React.CSSProperties = {
   display: "grid",
-  gap: "1rem",
+  gap: "var(--space-lg)",
   gridTemplateColumns: "1fr 1fr",
+  marginTop: "var(--space-md)"
 };
+
 const grid3: React.CSSProperties = {
   display: "grid",
-  gap: "1rem",
-  gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
+  gap: "var(--space-lg)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+  marginTop: "var(--space-md)"
 };

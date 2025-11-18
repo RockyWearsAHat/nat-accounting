@@ -1,3 +1,274 @@
+## Design System (Jan 2025 - Neobrutalism + Glassmorphism)
+
+### Overview
+The site uses a modern design system combining **Neobrutalism** (bold borders, hard shadows, flat colors) with **Dark Mode** aesthetics and **Glassmorphism** effects for cards/modals. All colors are CSS variables for easy light/dark mode switching.
+
+### Color Palette
+#FFFFFF - #000000 - Pure White to Black Gradient (Any shades of gray in between, MAIN TONES, USE OTHER TONES FOR ACCENT COLORS)
+#798C8C - Muted Teal Gray Darker
+#AEBFBE - Teal Gray, Middle Tone
+#D0D9D4 - Light Teal Gray
+#F2EFDF - Off white
+#59554C - Dark tone
+
+The dark tone should be the main background color, with the lighter tones used for cards, text, and accents to create a modern, professional look.
+
+### Styling principles
+Ensure that every component works together to build a complete well organized piece. This is a work of art you are the painter of, use simple code in creative ways to create stunnning visuals. Always use CSS variables for colors, fonts, spacing, and shadows to ensure consistency.
+
+### Project Vision
+
+Build a premium, modern website inspired by the minimalist luxury feel of https://www.sagiagency.com/, but with far more creative freedom and visual experimentation.
+You may use advanced CSS techniques, unique interactions, micro-animations, and high-end visual polish — the vibe of Fireship’s clever micro-UI tricks and the silent Indian developer YouTubers who build insane CSS animations.
+
+### Color Palette
+
+Use ONLY the brand colors already defined above in the [color palette](#color-palette) section. Reference these with global css variables so they can be easily tuned later on.
+Every gradient, animation, and effect should derive from those colors — no unapproved hues.
+
+### Design Philosophy
+
+Think:
+Minimalist + Premium + Experimental + High-Aesthetic.
+
+Copilot should:
+
+Embrace whitespace
+
+Use bold typography
+
+Leverage motion as a storytelling tool
+
+Mix subtle luxury with visually interesting enhancements
+
+Add tasteful micro-interactions (hover glows, text reveals, masked transitions)
+
+Make small “wow” moments without becoming noisy
+
+Use advanced CSS (clip-path, mix-blend-mode, container queries, scroll-linked animations, fancy gradients, gooey effects, subtle motion blur, etc.) when appropriate
+
+Creative Guidelines
+
+You have permission to be creative as long as it stays premium, not chaotic.
+
+Encouraged
+
+Smooth scroll animations
+
+Text mask reveals
+
+Underline animations
+
+Liquid hover effects
+
+Parallax scrolling
+
+Layered depth effects
+
+Grid layouts with staggered animation
+
+Magnetic buttons
+
+Split-text animations
+
+“Reveal on scroll” elements
+
+Soft gradients generated using the brand palette
+
+Lottie-style animations (CSS or JS)
+
+Creative transitions between sections
+
+Animated geometric shapes/particles that remain subtle and elegant
+
+Not Encouraged
+
+Overly neon visuals
+
+Cartoonish effects
+
+Loud rainbow colors
+
+UI that feels chaotic or cluttered
+
+Anything that dilutes the luxury aesthetic
+
+Typography
+
+Use modern sans-serif fonts.
+Large, bold headings.
+Minimal tracking.
+Comfortable body spacing.
+
+Typography should feel intentional, clean, and artistic — like a boutique studio.
+
+Layout
+
+Use a component structure similar to:
+
+Hero
+
+Capabilities / Services
+
+Case Studies / Work Gallery
+
+About Section
+
+Testimonials or Social Proof (optional)
+
+CTA
+
+Footer
+
+But feel free to enhance these with:
+
+Animations
+
+Interactive containers
+
+Scroll-linked transforms
+
+Layered depth
+
+### Core Files
+- **`src/client/styles/theme.css`** - Central design system with all CSS variables
+- **`src/client/index.html`** - Imports theme.css and Google Fonts (Space Grotesk)
+- **`src/client/pages/AdminPanel.module.css`** - Admin-specific component styles
+
+### Color System (CSS Variables)
+
+**Background Colors:**
+- `--color-bg-primary`: #0a0a0f (deep dark blue-black)
+- `--color-bg-secondary`: #13131a (slightly lighter)
+- `--color-bg-tertiary`: #1a1a24 (card backgrounds)
+- `--color-bg-elevated`: #21212e (elevated elements)
+
+**Text Colors:**
+- `--color-text-primary`: #ffffff (pure white)
+- `--color-text-secondary`: #b4b4c8 (muted purple-gray)
+- `--color-text-tertiary`: #7a7a8f (even more muted)
+- `--color-text-inverse`: #0a0a0f (for light backgrounds)
+
+**Accent Colors:**
+- `--color-accent-blue`: #00d9ff (electric cyan - primary)
+- `--color-accent-red`: #ff0055 (hot pink-red - secondary)
+- `--color-accent-purple`: #aa00ff (electric purple)
+- `--color-accent-green`: #00ff88 (neon green)
+- `--color-accent-yellow`: #ffdd00 (bright yellow)
+
+**Semantic Colors:**
+- `--color-success`: #00ff88
+- `--color-warning`: #ffdd00
+- `--color-error`: #ff0055
+- `--color-info`: #00d9ff
+
+### Neobrutalism Elements
+
+**Borders:**
+- Thick borders (3px-8px) with `--border-color-primary` (cyan) or `--border-color-secondary` (red)
+- Sharp corners (`--radius-brutal: 0px`) for most elements
+- Slightly rounded (`--radius-sm: 4px`) for inputs/cards
+
+**Shadows (Hard/Offset):**
+- `--shadow-brutal-sm`: 3px 3px 0 (cyan/red)
+- `--shadow-brutal-md`: 5px 5px 0 (cyan/red)
+- `--shadow-brutal-lg`: 8px 8px 0 (cyan/red)
+- Hover states: increase offset to 8px 8px 0
+- Active states: reduce to 2px 2px 0
+
+**Button Styling:**
+```css
+.brutal-button {
+  background: var(--color-accent-blue);
+  border: var(--border-width-thick) solid var(--color-text-primary);
+  box-shadow: var(--shadow-brutal-md);
+  text-transform: uppercase;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+}
+```
+
+### Glassmorphism Elements
+
+**Glass Cards:**
+- `background: var(--glass-bg)` - rgba(19, 19, 26, 0.75)
+- `backdrop-filter: var(--glass-blur)` - blur(20px)
+- `border: var(--border-width-thin) solid var(--glass-border)` - semi-transparent
+- Used for modals, consultation form container, admin settings cards
+
+### Typography System
+
+**Fonts:**
+- `--font-sans`: System font stack (body text)
+- `--font-display`: "Space Grotesk" (headers, important text)
+- `--font-mono`: SF Mono, Monaco (code snippets)
+
+**Sizes:**
+- `--font-size-xs`: 0.75rem (12px)
+- `--font-size-sm`: 0.875rem (14px)
+- `--font-size-base`: 1rem (16px)
+- `--font-size-xl`: 1.25rem (20px)
+- `--font-size-2xl`: 1.5rem (24px)
+- `--font-size-3xl`: 1.875rem (30px)
+- `--font-size-4xl`: 2.25rem (36px)
+- `--font-size-5xl`: 3rem (48px)
+- `--font-size-6xl`: 3.75rem (60px)
+
+**Gradient Text:**
+```css
+background: linear-gradient(135deg, var(--color-accent-blue) 0%, var(--color-accent-purple) 100%);
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+```
+
+### Spacing System (8px base)
+- `--space-xs`: 4px
+- `--space-sm`: 8px
+- `--space-md`: 16px
+- `--space-lg`: 24px
+- `--space-xl`: 32px
+- `--space-2xl`: 48px
+- `--space-3xl`: 64px
+- `--space-4xl`: 96px
+
+### Abstract Background Shapes
+The site uses animated, blurred radial gradients in the background:
+- `body::before` - Blue gradient (top-right, 600px)
+- `body::after` - Red gradient (bottom-left, 500px)
+- `opacity: 0.12`, `filter: blur(80px)`
+- Animated with `@keyframes float` for subtle movement
+
+### Component Patterns
+
+**Homepage:**
+- Hero section with gradient title text
+- Services grid with brutal card hover effects
+- Glassmorphism consultation form container
+
+**AdminPanel:**
+- Tab navigation with neobrutalism buttons
+- Settings cards with glassmorphism
+- Calendar chip styling with color pickers
+- Form elements with proper spacing and borders
+
+**ConsultationForm:**
+- Sectioned layout with clear headings
+- Brutal checkboxes with emoji labels
+- Large button with hover/active shadow transitions
+
+### Light Mode (Future)
+All colors have light mode overrides in `[data-theme="light"]` selector in theme.css. Not currently implemented but structure is ready.
+
+### Usage Guidelines
+1. Always use CSS variables instead of hardcoded colors
+2. Use `--font-display` for headings, `--font-sans` for body
+3. Apply brutal shadows to interactive elements (buttons, cards)
+4. Use glassmorphism for overlays and elevated surfaces
+5. Maintain consistent spacing with `--space-*` variables
+6. Apply gradient text to hero/important headings
+
+---
+
 ## Calendar & Scheduling System (2025 Architecture)
 
 ### Core Calendar Architecture 

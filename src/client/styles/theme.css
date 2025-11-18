@@ -1,0 +1,371 @@
+/**
+ * NEOBRUTALISM + DARK MODE + GLASSMORPHISM DESIGN SYSTEM
+ * 
+ * Color Philosophy:
+ * - Dark base (near-black backgrounds)
+ * - Bold, saturated accent colors (electric blue, hot red)
+ * - Thick borders (neobrutalism)
+ * - Glassmorphism for cards/modals
+ * - High contrast for accessibility
+ */
+
+:root {
+  /* ========================================
+     BASE COLORS - Dark Mode (Deep Blue Tones)
+     ======================================== */
+  --color-bg-primary: #0a0f1a;           /* Deep blue-black */
+  --color-bg-secondary: #0f1420;         /* Slightly lighter blue */
+  --color-bg-tertiary: #141a28;          /* Card/section backgrounds with blue */
+  --color-bg-elevated: #1a2030;          /* Elevated elements */
+  
+  /* ========================================
+     TEXT COLORS
+     ======================================== */
+  --color-text-primary: #ffffff;         /* Pure white for main text */
+  --color-text-secondary: #b4b4c8;       /* Muted purple-gray */
+  --color-text-tertiary: #7a7a8f;        /* Even more muted */
+  --color-text-inverse: #0a0a0f;         /* For light backgrounds */
+  
+  /* ========================================
+     ACCENT COLORS - Vibrant & Bold
+     ======================================== */
+  --color-accent-blue: #00d9ff;          /* Electric cyan */
+  --color-accent-blue-bright: #5ce1ff;   /* Lighter cyan */
+  --color-accent-blue-dim: #0099cc;      /* Darker cyan */
+  
+  --color-accent-red: #ff0055;           /* Hot pink-red */
+  --color-accent-red-bright: #ff4d88;    /* Lighter red */
+  --color-accent-red-dim: #cc0044;       /* Darker red */
+  
+  --color-accent-purple: #aa00ff;        /* Electric purple */
+  --color-accent-green: #00ff88;         /* Neon green */
+  --color-accent-yellow: #ffdd00;        /* Bright yellow */
+  
+  /* ========================================
+     SEMANTIC COLORS
+     ======================================== */
+  --color-success: #00ff88;              /* Neon green */
+  --color-warning: #ffdd00;              /* Bright yellow */
+  --color-error: #ff0055;                /* Hot pink-red */
+  --color-info: #00d9ff;                 /* Electric cyan */
+  
+  /* ========================================
+     BORDER & OUTLINE - Neobrutalism
+     ======================================== */
+  --border-width-thin: 2px;
+  --border-width-medium: 3px;
+  --border-width-thick: 5px;
+  --border-width-ultra: 8px;
+  
+  --border-color-primary: #00d9ff;       /* Cyan borders */
+  --border-color-secondary: #ff0055;     /* Red borders */
+  --border-color-subtle: #2a2a38;        /* Dark borders */
+  --border-color-strong: #ffffff;        /* White borders */
+  
+  /* ========================================
+     SHADOWS - Neobrutalism Hard Shadows
+     ======================================== */
+  --shadow-brutal-sm: 3px 3px 0 var(--border-color-primary);
+  --shadow-brutal-md: 5px 5px 0 var(--border-color-primary);
+  --shadow-brutal-lg: 8px 8px 0 var(--border-color-primary);
+  --shadow-brutal-xl: 12px 12px 0 var(--border-color-primary);
+  
+  --shadow-brutal-red-sm: 3px 3px 0 var(--border-color-secondary);
+  --shadow-brutal-red-md: 5px 5px 0 var(--border-color-secondary);
+  --shadow-brutal-red-lg: 8px 8px 0 var(--border-color-secondary);
+  
+  /* Glassmorphism subtle shadows */
+  --shadow-glass: 0 8px 32px rgba(0, 217, 255, 0.1);
+  --shadow-glass-strong: 0 8px 32px rgba(0, 217, 255, 0.25);
+  
+  /* ========================================
+     GLASSMORPHISM
+     ======================================== */
+  --glass-bg: rgba(19, 19, 26, 0.75);
+  --glass-bg-strong: rgba(26, 26, 36, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: blur(20px);
+  
+  /* ========================================
+     SPACING SYSTEM (8px base)
+     ======================================== */
+  --space-xs: 0.25rem;      /* 4px */
+  --space-sm: 0.5rem;       /* 8px */
+  --space-md: 1rem;         /* 16px */
+  --space-lg: 1.5rem;       /* 24px */
+  --space-xl: 2rem;         /* 32px */
+  --space-2xl: 3rem;        /* 48px */
+  --space-3xl: 4rem;        /* 64px */
+  --space-4xl: 6rem;        /* 96px */
+  
+  /* ========================================
+     BORDER RADIUS
+     ======================================== */
+  --radius-none: 0;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  
+  /* Neobrutalism typically uses minimal radius */
+  --radius-brutal: 0px;
+  
+  /* ========================================
+     TYPOGRAPHY
+     ======================================== */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  --font-display: "Space Grotesk", -apple-system, sans-serif; /* For headers */
+  
+  --font-size-xs: 0.75rem;      /* 12px */
+  --font-size-sm: 0.875rem;     /* 14px */
+  --font-size-base: 1rem;       /* 16px */
+  --font-size-lg: 1.125rem;     /* 18px */
+  --font-size-xl: 1.25rem;      /* 20px */
+  --font-size-2xl: 1.5rem;      /* 24px */
+  --font-size-3xl: 1.875rem;    /* 30px */
+  --font-size-4xl: 2.25rem;     /* 36px */
+  --font-size-5xl: 3rem;        /* 48px */
+  --font-size-6xl: 3.75rem;     /* 60px */
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-black: 900;
+  
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  
+  --letter-spacing-tight: -0.02em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.05em;
+  --letter-spacing-wider: 0.1em;
+  
+  /* ========================================
+     TRANSITIONS
+     ======================================== */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 400ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  
+  /* ========================================
+     Z-INDEX LAYERS
+     ======================================== */
+  --z-base: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-fixed: 1200;
+  --z-modal-backdrop: 1300;
+  --z-modal: 1400;
+  --z-popover: 1500;
+  --z-tooltip: 1600;
+}
+
+/* ========================================
+   LIGHT MODE OVERRIDES (for future implementation)
+   ======================================== */
+[data-theme="light"] {
+  --color-bg-primary: #f5f5fa;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #fafaff;
+  --color-bg-elevated: #ffffff;
+  
+  --color-text-primary: #0a0a0f;
+  --color-text-secondary: #4a4a5f;
+  --color-text-tertiary: #7a7a8f;
+  --color-text-inverse: #ffffff;
+  
+  --border-color-subtle: #d4d4e0;
+  
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-bg-strong: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(0, 0, 0, 0.08);
+}
+
+/* ========================================
+   GLOBAL RESET & BASE STYLES
+   ======================================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  overflow-x: hidden;
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+/* Glassmorphism card */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--border-width-thin) solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-glass);
+}
+
+/* Neobrutalism card */
+.brutal-card {
+  background: var(--color-bg-tertiary);
+  border: var(--border-width-thick) solid var(--border-color-primary);
+  border-radius: var(--radius-brutal);
+  box-shadow: var(--shadow-brutal-md);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.brutal-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-brutal-lg);
+}
+
+/* Neobrutalism button */
+.brutal-button {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+  
+  padding: var(--space-md) var(--space-xl);
+  
+  background: var(--color-accent-blue);
+  color: var(--color-text-inverse);
+  
+  border: var(--border-width-thick) solid var(--border-color-strong);
+  border-radius: var(--radius-brutal);
+  box-shadow: var(--shadow-brutal-md);
+  
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  position: relative;
+}
+
+.brutal-button:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-brutal-lg);
+}
+
+.brutal-button:active {
+  transform: translate(0, 0);
+  box-shadow: var(--shadow-brutal-sm);
+}
+
+.brutal-button.secondary {
+  background: var(--color-accent-red);
+}
+
+.brutal-button.outline {
+  background: transparent;
+  color: var(--color-accent-blue);
+  border-color: var(--color-accent-blue);
+}
+
+/* Abstract shapes for visual interest */
+.abstract-shape {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0.15;
+  filter: blur(60px);
+  z-index: 0;
+}
+
+.abstract-shape-blue {
+  background: var(--color-accent-blue);
+}
+
+.abstract-shape-red {
+  background: var(--color-accent-red);
+}
+
+.abstract-shape-purple {
+  background: var(--color-accent-purple);
+}
+
+/* Text utilities */
+.text-gradient-blue {
+  background: linear-gradient(135deg, var(--color-accent-blue) 0%, var(--color-accent-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-red {
+  background: linear-gradient(135deg, var(--color-accent-red) 0%, var(--color-accent-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-accent-blue);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-blue-bright);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-accent-blue);
+  color: var(--color-text-inverse);
+}
+
+::-moz-selection {
+  background: var(--color-accent-blue);
+  color: var(--color-text-inverse);
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+
+@media (max-width: 1024px) {
+  :root {
+    --font-size-6xl: 3rem;
+    --font-size-5xl: 2.5rem;
+    --font-size-4xl: 2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --font-size-6xl: 2.5rem;
+    --font-size-5xl: 2rem;
+    --font-size-4xl: 1.75rem;
+    --font-size-3xl: 1.5rem;
+    --space-4xl: 48px;
+    --space-3xl: 40px;
+  }
+}

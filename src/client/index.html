@@ -4,24 +4,74 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nat's Accounting</title>
+    
+    <!-- Google Fonts for better typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Import design system -->
+    <link rel="stylesheet" href="/styles/theme.css">
+    
     <style>
-      body {
-        margin: 0;
-        font-family: "Helvetica Neue", Arial, sans-serif;
-        background: #000;
-        color: #fff;
-      }
+      /* Additional base styles */
       a {
-        color: #fff;
+        color: var(--color-accent-blue);
+        text-decoration: none;
+        transition: color var(--transition-fast);
       }
-      * {
-        box-sizing: border-box;
+      
+      a:hover {
+        color: var(--color-accent-blue-bright);
+      }
+      
+      /* Background abstract shapes */
+      body::before,
+      body::after {
+        content: '';
+        position: fixed;
+        z-index: 0;
+        pointer-events: none;
+        opacity: 0.12;
+        filter: blur(80px);
+      }
+      
+      body::before {
+        top: -200px;
+        right: -200px;
+        width: 600px;
+        height: 600px;
+        background: radial-gradient(circle, var(--color-accent-blue) 0%, transparent 70%);
+        animation: float 20s ease-in-out infinite;
+      }
+      
+      body::after {
+        bottom: -200px;
+        left: -200px;
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, var(--color-accent-red) 0%, transparent 70%);
+        animation: float 25s ease-in-out infinite reverse;
+      }
+      
+      @keyframes float {
+        0%, 100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(30px, -30px) scale(1.1);
+        }
+      }
+      
+      #root {
+        position: relative;
+        z-index: 1;
       }
     </style>
   </head>
   <body>
-  <div id="root"></div>
-  <div id="modal-root"></div>
+    <div id="root"></div>
+    <div id="modal-root"></div>
     <script type="module" src="/entry-client.tsx"></script>
   </body>
 </html>
