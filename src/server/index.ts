@@ -84,6 +84,7 @@ import clientRouter from "./routes/client.js";
 import documentsRouter from "./routes/documents.js";
 import subscriptionsRouter from "./routes/subscriptions.js";
 import invoicesRouter from "./routes/invoices.js";
+import clientsRouter from "./routes/clients.js";
 
 // Mount all API routes at MODULE LEVEL (before startServer - matches working example)
 app.use("/api/auth", authRouter);
@@ -101,6 +102,7 @@ app.use("/api/meetings", meetingsRouter);
 app.use("/api/pricing", pricingRouter);
 app.use("/api/client", clientRouter);
 app.use("/api/client/documents", documentsRouter);
+app.use("/api/clients", clientsRouter);
 app.use("/api/subscriptions", subscriptionsRouter);
 app.use("/api/invoices", invoicesRouter);
 app.use("/api/zoom", zoomRouter);

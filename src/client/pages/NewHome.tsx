@@ -6,8 +6,46 @@ import styles from './NewHome.module.css';
 
 gsap.registerPlugin(ScrollTrigger);
 
+interface Client {
+  _id: string;
+  name: string;
+  logoUrl?: string;
+  website?: string;
+  color: string;
+  displayOrder: number;
+}
+
+// Helper function to convert hex color to hue rotation value for CSS filter
+const getHueRotation = (hexColor: string): number => {
+  // Remove # if present
+  const hex = hexColor.replace('#', '');
+  
+  // Convert hex to RGB
+  const r = parseInt(hex.substring(0, 2), 16) / 255;
+  const g = parseInt(hex.substring(2, 4), 16) / 255;
+  const b = parseInt(hex.substring(4, 6), 16) / 255;
+  
+  // Convert RGB to HSL to get hue
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  
+  if (max !== min) {
+    const delta = max - min;
+    if (max === r) {
+      h = ((g - b) / delta + (g < b ? 6 : 0)) / 6;
+    } else if (max === g) {
+      h = ((b - r) / delta + 2) / 6;
+    } else {
+      h = ((r - g) / delta + 4) / 6;
+    }
+  }
+  
+  return Math.round(h * 360);
+};
+
 const NewHome: React.FC = () => {
-  const founderImage = '/temp.JPG';
+  const founderImage = '/headshot.JPG';
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -15,6 +53,8 @@ const NewHome: React.FC = () => {
     company: '',
     message: ''
   });
+  const [clients, setClients] = useState<Client[]>([]);
+  const [scrollHintText, setScrollHintText] = useState('Scroll to explore');
 
   // Refs for animation
   const heroRef = useRef<HTMLElement>(null);
@@ -187,9 +227,9 @@ const NewHome: React.FC = () => {
     gsap.set(messageInputRef.current, { y: 'calc(120% + 80px)' });
     gsap.set(buttonRef.current, { y: 'calc(120% + 96px)' });
 
-    // Set scroll hint to invisible initially
+    // Set scroll hint to visible initially
     if (scrollHintRef.current) {
-      gsap.set(scrollHintRef.current, { opacity: 0, y: -10 });
+      gsap.set(scrollHintRef.current, { opacity: 1, y: 0 });
     }
 
     // Set 3D transform properties for form inputs (art piece on strings effect)
@@ -214,20 +254,23 @@ const NewHome: React.FC = () => {
       scrollTrigger: {
         trigger: heroRef.current,
         start: 'top top',
-        end: '+=100%',            // 100vh for main animation
+        end: '+=400%',            // 100vh for main animation
         scrub: true,              // true = instant 1:1 scroll mapping (no delay)
         pin: true,
         pinSpacing: true,
         anticipatePin: 0.5,
         fastScrollEnd: true,
         onUpdate: (self) => {
-          // Hide scroll hint when user starts scrolling
-          if (scrollHintRef.current && self.progress > 0.01) {
+          if (!scrollHintRef.current) return;
+          
+          // Show "Scroll to explore" when at position 0
+          if (self.progress === 0) {
+            setScrollHintText('Scroll to explore');
+            gsap.to(scrollHintRef.current, { opacity: 1, duration: 0.5, delay: 0.2 });
+          }
+          // Hide scroll hint when user scrolls away from top
+          else if (self.progress > 0.01) {
             gsap.to(scrollHintRef.current, { opacity: 0, duration: 0.3 });
-            if (inactivityTimerRef.current) {
-              window.clearTimeout(inactivityTimerRef.current);
-              inactivityTimerRef.current = null;
-            }
           }
         }
       }
@@ -304,49 +347,49 @@ const NewHome: React.FC = () => {
     }, {
       y: 0,
       duration: 8,
-      ease: 'none'
+      ease: 'power1.out'
     }, 'formStart')  // Form lands first at formStart + 8
     .fromTo(nameInputRef.current, { 
       y: 'calc(120% + 16px)'
     }, { 
       y: 0,  // Aligns with form (no gap)
       duration: 8,
-      ease: 'none'
+      ease: 'power1.out'
     }, 'formStart+=0.5')  // Lands 0.5 scroll units after form
     .fromTo(emailInputRef.current, { 
       y: 'calc(120% + 32px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'none'
+      ease: 'power1.out'
     }, 'formStart+=1')  // Lands 1 scroll unit after form
     .fromTo(phoneInputRef.current, { 
       y: 'calc(120% + 48px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'none'
+      ease: 'power1.out'
     }, 'formStart+=1.5')
     .fromTo(companyInputRef.current, { 
       y: 'calc(120% + 64px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'none'
+      ease: 'power1.out'
     }, 'formStart+=2')
     .fromTo(messageInputRef.current, { 
       y: 'calc(120% + 80px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'none'
+      ease: 'power1.out'
     }, 'formStart+=2.5')
     .fromTo(buttonRef.current, { 
       y: 'calc(120% + 96px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'none'
+      ease: 'power1.out'
     }, 'formStart+=3')  // Last element lands 3 scroll units after form
     // Hold aligned (no gaps) until unpin
     .to({}, { duration: 30 });
@@ -366,37 +409,37 @@ const NewHome: React.FC = () => {
       .to(formContainerRef.current, { 
         y: '-120%', 
         duration: 8, 
-        ease: 'none' 
+        ease: 'power1.in' 
       }, 0)  // Exits first at position 0
       .to(nameInputRef.current, { 
         y: 'calc(-120% - 8px)', 
         duration: 8, 
-        ease: 'none' 
+        ease: 'power1.in' 
       }, 0.5)  // Exits at position 0.5
       .to(emailInputRef.current, { 
         y: 'calc(-120% - 16px)', 
         duration: 8, 
-        ease: 'none' 
+        ease: 'power1.in' 
       }, 1)
       .to(phoneInputRef.current, { 
         y: 'calc(-120% - 24px)', 
         duration: 8, 
-        ease: 'none' 
+        ease: 'power1.in' 
       }, 1.5)
       .to(companyInputRef.current, { 
         y: 'calc(-120% - 32px)', 
         duration: 8, 
-        ease: 'none' 
+        ease: 'power1.in' 
       }, 2)
       .to(messageInputRef.current, { 
         y: 'calc(-120% - 40px)', 
         duration: 8, 
-        ease: 'none' 
+        ease: 'power1.in' 
       }, 2.5)
       .to(buttonRef.current, { 
         y: 'calc(-120% - 48px)', 
         duration: 8, 
-        ease: 'none' 
+        ease: 'power1.in' 
       }, 3);
 
     // Scroll-triggered animations for service cards - instant scroll mapping, staggered appearance
@@ -436,40 +479,65 @@ const NewHome: React.FC = () => {
         ease: 'none',
         scrollTrigger: {
           trigger: aboutSectionRef.current,
-          start: 'top 100%',
-          end: '+=180%',
+          start: 'top 140%',
+          end: '+=260%',
           scrub: true
         }
       });
     }
 
-    // Inactivity detection for scroll hint
-    const hideScrollHint = () => {
-      if (scrollHintRef.current) {
-        gsap.to(scrollHintRef.current, { opacity: 0, duration: 0.3 });
+    // Inactivity detection for secondary scroll hint
+    let lastScrollTime = Date.now();
+    let isInHeroSection = true;
+    let lastScrollY = window.scrollY;
+    
+    const handleScrollActivity = () => {
+      lastScrollTime = Date.now();
+      const currentScrollY = window.scrollY;
+      
+      // Check if we're still in the hero section (first animation)
+      const heroRect = heroRef.current?.getBoundingClientRect();
+      isInHeroSection = heroRect ? heroRect.bottom > window.innerHeight * 0.5 : false;
+      
+      // Show "Scroll to explore" when returning to top
+      if (currentScrollY === 0 && lastScrollY > 0 && scrollHintRef.current) {
+        setScrollHintText('Scroll to explore');
+        gsap.to(scrollHintRef.current, { opacity: 1, duration: 0.5, delay: 0.2 });
       }
-      // Clear timer when user scrolls
+      
+      lastScrollY = currentScrollY;
+      
+      // Clear existing timer
       if (inactivityTimerRef.current) {
         window.clearTimeout(inactivityTimerRef.current);
         inactivityTimerRef.current = null;
       }
+      
+      // Only set new timer if we're in hero section and not at scroll position 0
+      // Don't interfere with the "Scroll to explore" hint at the top
+      if (isInHeroSection && window.scrollY > 50) {
+        inactivityTimerRef.current = window.setTimeout(() => {
+          const timeSinceLastScroll = Date.now() - lastScrollTime;
+          // If 10+ seconds have passed and still in hero section
+          if (timeSinceLastScroll >= 10000 && isInHeroSection && scrollHintRef.current && window.scrollY > 50) {
+            setScrollHintText('Scroll more to continue exploring');
+            gsap.to(scrollHintRef.current, { 
+              opacity: 1, 
+              duration: 0.8,
+              ease: 'power2.inOut'
+            });
+          }
+        }, 10000);
+      }
     };
 
-    // Show hint after 10 seconds if still at top of page
-    inactivityTimerRef.current = window.setTimeout(() => {
-      if (scrollHintRef.current && window.scrollY < 50) {
-        gsap.to(scrollHintRef.current, { 
-          opacity: 1, 
-          duration: 1,
-          ease: 'power2.inOut'
-        });
-      }
-    }, 10000);
-
-    // Listen for scroll events to hide hint
-    window.addEventListener('scroll', hideScrollHint);
-    window.addEventListener('wheel', hideScrollHint);
-    window.addEventListener('touchmove', hideScrollHint);
+    // Listen for scroll events to track activity
+    window.addEventListener('scroll', handleScrollActivity);
+    window.addEventListener('wheel', handleScrollActivity);
+    window.addEventListener('touchmove', handleScrollActivity);
+    
+    // Initial timer setup
+    handleScrollActivity();
 
     // Cleanup
     return () => {
@@ -477,9 +545,9 @@ const NewHome: React.FC = () => {
       if (inactivityTimerRef.current) {
         window.clearTimeout(inactivityTimerRef.current);
       }
-      window.removeEventListener('scroll', hideScrollHint);
-      window.removeEventListener('wheel', hideScrollHint);
-      window.removeEventListener('touchmove', hideScrollHint);
+      window.removeEventListener('scroll', handleScrollActivity);
+      window.removeEventListener('wheel', handleScrollActivity);
+      window.removeEventListener('touchmove', handleScrollActivity);
       window.removeEventListener('scroll', updateOverlays);
       window.removeEventListener('resize', updateOverlays);
     };
@@ -531,6 +599,23 @@ const NewHome: React.FC = () => {
     };
   }, [drawCanvas]);
 
+  // Fetch clients from MongoDB
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const response = await fetch('/api/clients');
+        const data = await response.json();
+        if (data.clients) {
+          setClients(data.clients);
+        }
+      } catch (error) {
+        console.error('Error fetching clients:', error);
+      }
+    };
+
+    fetchClients();
+  }, []);
+
   // Cursor-following effect for service cards
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>, index: number) => {
     const card = serviceCardsRef.current[index];
@@ -560,9 +645,9 @@ const NewHome: React.FC = () => {
           <NorthStarLogo size={700} color="rgba(174, 191, 190, 0.06)" />
         </div>
 
-        {/* Scroll hint - appears after 10s of inactivity */}
+        {/* Scroll hint - shows immediately and updates based on scroll position */}
         <div ref={scrollHintRef} className={styles.scrollHint}>
-          <span className={styles.scrollHintText}>Scroll down to explore</span>
+          <span className={styles.scrollHintText}>{scrollHintText}</span>
           <svg className={styles.scrollHintArrow} width="24" height="24" viewBox="0 0 24 24" fill="none">
             <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
@@ -801,66 +886,59 @@ const NewHome: React.FC = () => {
       {/* Contact Section */}
       <section id="contact" className={styles.contact}>
         <div className={styles.contactContainer}>
-          <div className={styles.sectionHeader}>
+          <div className={styles.contactCta}>
             <div className={styles.sectionLabel}>Get In Touch</div>
-            <h2 className={styles.sectionTitle}>Let's Work Together</h2>
-            <p className={styles.sectionDescription}>
-              Schedule a free consultation to discuss your financial needs
+            <h2 className={styles.contactTitle}>Ready to Illuminate Your Financial Future?</h2>
+            <p className={styles.contactSubtitle}>
+              Join the growing list of companies that trust Lumina Strategy Group for accounting services, business improvement, and financial assistance.
             </p>
+            <button 
+              onClick={() => document.getElementById('hero')?.scrollIntoView({ behavior: 'smooth' })}
+              className={styles.contactCtaButton}
+            >
+              Schedule Free Consultation
+            </button>
           </div>
 
-          <form onSubmit={handleSubmit} className={styles.form}>
-            <div className={styles.formGrid}>
-              <div className={styles.formRow}>
-                <input
-                  type="text"
-                  placeholder="Your Name *"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className={styles.input}
-                />
-                <input
-                  type="email"
-                  placeholder="Email *"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className={styles.input}
-                />
+          {clients.length > 0 && (
+            <div>
+              <div className={styles.clientsLabel}>Trusted By</div>
+              <div className={styles.clientsGrid}>
+                {clients.map((client) => (
+                  <div
+                    key={client._id}
+                    className={styles.clientCard}
+                    onClick={() => client.website && window.open(client.website, '_blank', 'noopener,noreferrer')}
+                    title={client.name}
+                    role="link"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ' ') && client.website) {
+                        e.preventDefault();
+                        window.open(client.website, '_blank', 'noopener,noreferrer');
+                      }
+                    }}
+                    style={{
+                      cursor: client.website ? 'pointer' : 'default'
+                    }}
+                  >
+                    {client.logoUrl ? (
+                      <img
+                        src={`/api/clients/${client._id}/logo`}
+                        alt={client.name}
+                        className={styles.clientLogo}
+                        style={{
+                          filter: `grayscale(100%) brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(${getHueRotation(client.color)}deg)`
+                        }}
+                      />
+                    ) : (
+                      <span className={styles.clientName}>{client.name}</span>
+                    )}
+                  </div>
+                ))}
               </div>
-
-              <div className={styles.formRow}>
-                <input
-                  type="tel"
-                  placeholder="Phone *"
-                  required
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className={styles.input}
-                />
-                <input
-                  type="text"
-                  placeholder="Company"
-                  value={formData.company}
-                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                  className={styles.input}
-                />
-              </div>
-
-              <textarea
-                placeholder="Tell us about your needs..."
-                required
-                value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                className={styles.textarea}
-              />
-
-              <button type="submit" className={styles.submitButton}>
-                Send Message
-              </button>
             </div>
-          </form>
+          )}
         </div>
       </section>
 

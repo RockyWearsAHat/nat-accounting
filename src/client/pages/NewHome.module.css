@@ -636,7 +636,7 @@ html {
 }
 
 .credentialItem {
-  background: rgba(12, 12, 18, 0.1);
+  background: rgba(12, 12, 18, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
   padding: 3rem 2rem;
@@ -682,9 +682,7 @@ html {
   border-left: 4px solid var(--color-accent);
   background: rgba(255, 255, 255, 0.02);
   margin-top: 2rem;
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
+  text-align: center;
 }
 
 .quoteText {
@@ -702,9 +700,13 @@ html {
 }
 
 .contactContainer {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
+}
+
+.contactCta {
   text-align: center;
+  margin-bottom: 6rem;
 }
 
 .contactTitle {
@@ -713,6 +715,7 @@ html {
   color: var(--color-white);
   margin-bottom: 1.5rem;
   letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .contactSubtitle {
@@ -720,68 +723,98 @@ html {
   color: var(--color-gray-mid);
   margin-bottom: 3rem;
   line-height: 1.7;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.contactInfo {
-  display: flex;
-  gap: 3rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.contactItem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  background: var(--glass-bg);
-  padding: 2rem;
-  border-radius: 12px;
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(20px);
-  min-width: 200px;
+.contactCtaButton {
+  padding: 1.25rem 3rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-dark-bg);
+  background: var(--color-accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
   transition: all 0.3s ease;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 16px rgba(121, 140, 140, 0.3);
 }
 
-.contactItem:hover {
+.contactCtaButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(121, 140, 140, 0.4);
+  background: var(--color-accent-light);
+}
+
+.contactCtaButton:active {
+  transform: translateY(0);
+}
+
+.clientsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 2rem;
+  margin-top: 3rem;
+  max-width: 1000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.clientCard {
+  position: relative;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.clientCard:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
   transform: translateY(-4px);
-  border-color: var(--color-accent);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3),
-              0 0 20px rgba(121, 140, 140, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
-.contactIcon {
-  width: 48px;
-  height: 48px;
-  color: var(--color-accent);
-  transition: transform 0.3s ease;
+.clientLogo {
+  max-width: 100%;
+  max-height: 80px;
+  width: auto;
+  height: auto;
+  filter: grayscale(100%) brightness(0) invert(1);
+  transition: filter 0.3s ease;
+  object-fit: contain;
 }
 
-.contactItem:hover .contactIcon {
-  transform: scale(1.1);
+.clientCard:hover .clientLogo {
+  filter: grayscale(100%) brightness(0) invert(1);
 }
 
-.contactLabel {
+.clientName {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-gray-light);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.clientsLabel {
+  text-align: center;
   font-size: 0.875rem;
   color: var(--color-gray-mid);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.contactValue {
-  font-size: 1.125rem;
+  letter-spacing: 0.15em;
+  margin-bottom: 1rem;
   font-weight: 600;
-  color: var(--color-white);
-}
-
-.contactValue a {
-  color: var(--color-accent-light);
-  text-decoration: none;
-  transition: color 0.3s ease;
-}
-
-.contactValue a:hover {
-  color: var(--color-accent);
 }
 
 /* Footer */

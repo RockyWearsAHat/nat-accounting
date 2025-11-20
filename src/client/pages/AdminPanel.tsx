@@ -9,6 +9,7 @@ import { CalendarEventsProvider } from '../contexts/CalendarEventsContext';
 import PricingCalculatorAdmin from '../components/PricingCalculatorAdmin';
 import { AdminDocumentsSection } from '../components/AdminDocumentsSection';
 import SubscriptionManager from '../components/SubscriptionManager';
+import { ClientsManagement } from '../components/ClientsManagement';
 
 interface User { email:string; role:string; }
 interface CalendarConfig { calendars:any[]; whitelist:string[]; busyEvents?:string[]; colors?:Record<string,string>; }
@@ -57,7 +58,7 @@ const CalendarSettings: React.FC<{ config:CalendarConfig|null; onBusyToggle:(url
 
 // Main Admin Panel ------------------------------------------------
 export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<"calendar" | "meetings" | "documents" | "pricing" | "settings">("calendar");
+  const [activeTab, setActiveTab] = useState<"calendar" | "meetings" | "documents" | "pricing" | "clients" | "settings">("calendar");
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   // Initialize config with cached data immediately
   const [config,setConfig] = useState<CalendarConfig|null>(() => {
@@ -236,6 +237,12 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
           💰 Pricing
         </button>
         <button
+          className={`${styles.tab} ${activeTab === "clients" ? styles.tabActive : ""}`}
+          onClick={() => setActiveTab("clients")}
+        >
+          🏢 Clients
+        </button>
+        <button
           className={`${styles.tab} ${activeTab === "settings" ? styles.tabActive : ""}`}
           onClick={() => setActiveTab("settings")}
         >
@@ -315,6 +322,13 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
               <h3>📋 Subscription Management</h3>
               <SubscriptionManager />
             </div>
+          </div>
+        )}
+
+        {/* Clients Tab */}
+        {activeTab === "clients" && (
+          <div className={styles.tabContent}>
+            <ClientsManagement />
           </div>
         )}
 
