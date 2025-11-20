@@ -709,6 +709,10 @@
 	background: #18181c !important;
 	border-bottom: 1px solid #23232a !important;
 	padding: 18px 24px !important;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
 }
 
 .headerLeft {
@@ -776,6 +780,18 @@
 	gap: 8px;
 }
 
+.headerRightRow {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.headerRight {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
 .navArrow {
 	width: 32px;
 	height: 32px;
@@ -813,6 +829,14 @@
 .todayButton:hover {
 	background: #2a2a2e;
 	border-color: #3a3a3e;
+}
+
+/* Match headerRight button sizing to nav buttons */
+.headerRight .btn {
+	padding: 6px 12px;
+	font-size: 13px;
+	height: 32px;
+	box-sizing: border-box;
 }
 
 /* Day headers improvement */

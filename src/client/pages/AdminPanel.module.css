@@ -1,33 +1,44 @@
-/* AdminPanel.module.css - Professional Dark Theme */
+/* AdminPanel.module.css - Professional Dark Theme matching NewHome */
 
 .adminContainer {
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem 3rem;
+  padding: 3rem 3rem;
+  min-height: 100vh;
+  background: #0a0a0f;
 }
 
 .header {
-  margin-bottom: 3rem;
+  margin-bottom: 4rem;
   padding-bottom: 2rem;
   border-bottom: 1px solid rgba(180, 180, 200, 0.08);
 }
 
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
 .headerTitle {
-  font-size: 2.5rem;
+  font-size: 2.75rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 0.5rem;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.75rem;
   color: #ffffff;
+  line-height: 1.2;
 }
 
 .headerSubtitle {
   font-size: 1.125rem;
   color: #b4b4c8;
   font-weight: 400;
+  line-height: 1.6;
 }
 
-/* Tab Navigation - Clean Professional Style */
+/* Tab Navigation - Clean Professional Style matching NewHome */
 .tabNav {
   display: flex;
   gap: 0.5rem;
@@ -35,10 +46,12 @@
   border-bottom: 1px solid rgba(180, 180, 200, 0.08);
   padding-bottom: 0;
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #798C8C #1a1a24;
 }
 
 .tab {
-  padding: 1rem 1.5rem;
+  padding: 1rem 1.75rem;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -46,13 +59,14 @@
   font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
+  position: relative;
 }
 
 .tab:hover {
   color: #ffffff;
-  background: rgba(121, 140, 140, 0.05);
+  background: rgba(121, 140, 140, 0.08);
 }
 
 .tabActive {
@@ -77,15 +91,28 @@
   }
 }
 
-/* Settings Cards - Glassmorphism Style */
+/* Calendar container with action button overlay */
+.calendarContainer {
+  position: relative;
+}
+
+/* calendarAction no longer needed; CTA injected via WeeklyCalendar headerRight */
+
+/* Settings Cards - Enhanced Glassmorphism matching NewHome */
 .settingsCard {
   background: rgba(26, 26, 36, 0.7);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(180, 180, 200, 0.1);
   border-radius: 12px;
-  padding: 2rem;
+  padding: 2.5rem;
   margin-bottom: 2rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settingsCard:hover {
+  border-color: rgba(121, 140, 140, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .settingsCard h3 {
@@ -344,58 +371,10 @@
   box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
 }
 
-/* Buttons */
-.btnPrimary {
-  padding: var(--space-md) var(--space-xl);
-  background: var(--color-accent-blue);
-  color: var(--color-text-inverse);
-  border: var(--border-width-thick) solid var(--color-text-primary);
-  font-family: var(--font-display);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-bold);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-wide);
-  cursor: pointer;
-  border-radius: var(--radius-brutal);
-  box-shadow: var(--shadow-brutal-md);
-  transition: all var(--transition-fast);
-}
+/* Buttons - sleek professional (NewHome style) */
+.btnPrimary { composes: btn btn--primary from "../styles/theme.css"; }
 
-.btnPrimary:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: var(--shadow-brutal-lg);
-}
-
-.btnPrimary:active {
-  transform: translate(0, 0);
-  box-shadow: var(--shadow-brutal-sm);
-}
-
-.btnSecondary {
-  padding: var(--space-md) var(--space-xl);
-  background: var(--color-accent-red);
-  color: var(--color-text-inverse);
-  border: var(--border-width-thick) solid var(--color-text-primary);
-  font-family: var(--font-display);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-bold);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-wide);
-  cursor: pointer;
-  border-radius: var(--radius-brutal);
-  box-shadow: var(--shadow-brutal-md);
-  transition: all var(--transition-fast);
-}
-
-.btnSecondary:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: var(--shadow-brutal-lg);
-}
-
-.btnSecondary:active {
-  transform: translate(0, 0);
-  box-shadow: var(--shadow-brutal-sm);
-}
+.btnSecondary { composes: btn btn--danger from "../styles/theme.css"; }
 
 .btnOutline {
   padding: var(--space-md) var(--space-xl);

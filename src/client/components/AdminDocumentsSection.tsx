@@ -343,7 +343,7 @@ export const AdminDocumentsSection: React.FC = () => {
         <div className={styles.container}>
             <div className={styles.header}>
                 <div>
-                    <button onClick={loadUsers} className={styles.backButton}>
+                    <button onClick={loadUsers} className={`${styles.backButton} btn btn--outline`}>
                         ← Back to Clients
                     </button>
                     <h2>{selectedUser.displayName}</h2>
@@ -354,7 +354,7 @@ export const AdminDocumentsSection: React.FC = () => {
                 <div className={styles.stats}>
                     <span className={styles.stat}>{selectedUser.documents.length} files</span>
                     {selectedFiles.size > 0 && (
-                        <button onClick={() => setShowFolderModal(true)} className={styles.folderButton}>
+                        <button onClick={() => setShowFolderModal(true)} className={`${styles.folderButton} btn btn--primary`}>
                             📁 Move {selectedFiles.size} to Folder
                         </button>
                     )}
@@ -364,7 +364,7 @@ export const AdminDocumentsSection: React.FC = () => {
             {/* Breadcrumb Navigation */}
             {currentFolder && (
                 <div className={styles.breadcrumbs}>
-                    <button onClick={handleBackToRoot} className={styles.breadcrumbButton}>
+                    <button onClick={handleBackToRoot} className={`${styles.breadcrumbButton} btn btn--outline`}>
                         <Folder size={18} style={{ marginRight: '4px' }} />
                         {selectedUser?.company ? `${selectedUser.company}'s Workspace` : `${selectedUser?.email}'s Workspace`}
                     </button>
@@ -377,7 +377,7 @@ export const AdminDocumentsSection: React.FC = () => {
                                 {isLast ? (
                                     <span className={styles.breadcrumbCurrent}>{segment}</span>
                                 ) : (
-                                    <button onClick={() => setCurrentFolder(path)} className={styles.breadcrumbButton}>
+                                    <button onClick={() => setCurrentFolder(path)} className={`${styles.breadcrumbButton} btn btn--outline`}>
                                         {segment}
                                     </button>
                                 )}
@@ -452,14 +452,14 @@ export const AdminDocumentsSection: React.FC = () => {
                             <div className={styles.docActions}>
                                 <button
                                     onClick={() => handleDownload(doc._id, doc.filename)}
-                                    className={styles.downloadButton}
+                                    className={`${styles.downloadButton} btn btn--outline`}
                                     title="Download"
                                 >
                                     ⬇
                                 </button>
                                 <button
                                     onClick={() => handleDelete(doc._id)}
-                                    className={styles.deleteButton}
+                                    className={`${styles.deleteButton} btn btn--danger`}
                                     title="Delete"
                                 >
                                     🗑
@@ -514,10 +514,10 @@ export const AdminDocumentsSection: React.FC = () => {
                             </div>
                         )}
                         <div className={styles.modalActions}>
-                            <button onClick={() => setShowFolderModal(false)} className={styles.cancelButton}>
+                            <button onClick={() => setShowFolderModal(false)} className={`${styles.cancelButton} btn btn--outline`}>
                                 Cancel
                             </button>
-                            <button onClick={handleMoveToFolder} className={styles.confirmButton}>
+                            <button onClick={handleMoveToFolder} className={`${styles.confirmButton} btn btn--primary`}>
                                 Move Files
                             </button>
                         </div>

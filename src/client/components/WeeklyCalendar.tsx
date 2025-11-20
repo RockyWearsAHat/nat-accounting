@@ -17,12 +17,14 @@ interface WeeklyCalendarProps {
   } | null;
   onConsultationUpdate: () => void; // trigger refetch after modal actions
   onConfigRefresh: () => void; // trigger refetch after config changes
+  headerRight?: React.ReactNode; // optional right-side header content (e.g., CTA button)
 }
 
 export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   config,
   hours,
   onConfigRefresh,
+  headerRight,
 }) => {
   // Helper function to get week start (Sunday)
   function getWeekStart(date: Date): Date {
@@ -666,10 +668,13 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
             </div>
           )}
         </div>
-        <div className={styles.headerNav}>
-          <button className={styles.navArrow} onClick={() => navigateWeek("prev")}>‹</button>
-          <button className={styles.todayButton} onClick={goToCurrentWeek}>Today</button>
-          <button className={styles.navArrow} onClick={() => navigateWeek("next")}>›</button>
+        <div className={styles.headerRightRow}>
+          <div className={styles.headerNav}>
+            <button className={styles.navArrow} onClick={() => navigateWeek("prev")}>‹</button>
+            <button className={styles.todayButton} onClick={goToCurrentWeek}>Today</button>
+            <button className={styles.navArrow} onClick={() => navigateWeek("next")}>›</button>
+          </div>
+          {headerRight ? <div className={styles.headerRight}>{headerRight}</div> : null}
         </div>
       </div>
 

@@ -9,12 +9,12 @@ function normalizeTimestampFormat(dateTimeStr: string): string {
     if (dateTimeStr.endsWith('.000Z')) {
       return dateTimeStr;
     }
-    
+
     // Already in Z format without milliseconds - convert to .000Z for consistency
     if (dateTimeStr.endsWith('Z') && !dateTimeStr.includes('.')) {
       return dateTimeStr.replace('Z', '.000Z');
     }
-    
+
     // Handle timezone-aware formats like "2025-10-21T10:30:00-07:00" (from Google)
     // These need to be converted to UTC .000Z format
     if (dateTimeStr.includes('+') || dateTimeStr.includes('-')) {
@@ -25,7 +25,7 @@ function normalizeTimestampFormat(dateTimeStr: string): string {
       }
       return date.toISOString(); // This converts to UTC .000Z format
     }
-    
+
     console.warn('[merged] Unrecognized timestamp format:', dateTimeStr);
     return dateTimeStr; // Return as-is for unknown formats
   } catch (error) {
@@ -77,11 +77,11 @@ router.get("/week", requireAdmin, async (req, res) => {
   const calendarUrlsFilterRaw = String(req.query.calendarUrls || "").trim();
   const calendarUrlFilters = calendarUrlsFilterRaw
     ? new Set(
-        calendarUrlsFilterRaw
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      )
+      calendarUrlsFilterRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )
     : null;
 
   const from = new Date(startStr + "T00:00:00");
@@ -98,7 +98,10 @@ router.get("/week", requireAdmin, async (req, res) => {
 
   async function pull(source: string, urlPath: string) {
     try {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Use localhost instead of subdomain for internal server-to-server calls
+      // (Node DNS doesn't resolve *.localhost subdomains)
+      const host = req.get('host')?.replace(/^[^.]+\./, '') || 'localhost:4000';
+      const baseUrl = `${req.protocol}://${host}`;
       const url = `${baseUrl}${urlPath}?start=${startStr}&end=${endStr}`;
       const r = await (globalThis as any).fetch(url, { headers });
       if (!r.ok) {
@@ -111,7 +114,7 @@ router.get("/week", requireAdmin, async (req, res) => {
       for (const ev of list) {
         // Tag source for downstream UI logic (if needed)
         ev._source = source;
-        
+
         // Normalize timestamps to consistent .000Z UTC format
         if (ev.start) {
           ev.start = normalizeTimestampFormat(ev.start);
@@ -119,7 +122,7 @@ router.get("/week", requireAdmin, async (req, res) => {
         if (ev.end) {
           ev.end = normalizeTimestampFormat(ev.end);
         }
-        
+
         events.push(ev);
       }
     } catch (e: any) {
@@ -187,11 +190,11 @@ router.get("/all", requireAdmin, async (req, res) => {
   const calendarUrlsFilterRaw = String(req.query.calendarUrls || "").trim();
   const calendarUrlFilters = calendarUrlsFilterRaw
     ? new Set(
-        calendarUrlsFilterRaw
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      )
+      calendarUrlsFilterRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )
     : null;
 
   const headers: Record<string, string> = {};
@@ -205,20 +208,27 @@ router.get("/all", requireAdmin, async (req, res) => {
 
   async function pullAll(source: string, urlPath: string) {
     try {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Use localhost instead of subdomain for internal server-to-server calls
+      // (Node DNS doesn't resolve *.localhost subdomains)
+      const host = req.get('host')?.replace(/^[^.]+\./, '') || 'localhost:4000';
+      const baseUrl = `${req.protocol}://${host}`;
       const url = `${baseUrl}${urlPath}`;
+      console.log(`[merged/all] Fetching ${source} from ${url} with headers:`, Object.keys(headers));
       const r = await (globalThis as any).fetch(url, { headers });
+      console.log(`[merged/all] ${source} response status=${r.status}`);
       if (!r.ok) {
-        console.warn(`[merged] ${source} fetch failed status=${r.status}`);
+        const errorText = await r.text().catch(() => 'unable to read error');
+        console.warn(`[merged] ${source} fetch failed status=${r.status}, body:`, errorText);
         return;
       }
       const data = await r.json();
+      console.log(`[merged/all] ${source} returned data:`, data ? `${Array.isArray(data.events) ? data.events.length : 0} events` : 'no data');
       const list = Array.isArray(data.events) ? data.events : [];
       sourceCounts[source] = list.length;
       for (const ev of list) {
         // Tag source for downstream UI logic (if needed)
         ev._source = source;
-        
+
         // Normalize timestamps to consistent .000Z UTC format
         if (ev.start) {
           ev.start = normalizeTimestampFormat(ev.start);
@@ -226,11 +236,13 @@ router.get("/all", requireAdmin, async (req, res) => {
         if (ev.end) {
           ev.end = normalizeTimestampFormat(ev.end);
         }
-        
+
         events.push(ev);
       }
     } catch (e: any) {
-      console.warn(`[merged] ${source} fetch exception`, e?.message || e);
+      console.error(`[merged/all] ${source} fetch exception:`, e);
+      console.error(`[merged/all] ${source} error stack:`, e?.stack);
+      console.error(`[merged/all] ${source} error cause:`, e?.cause);
     }
   }
 

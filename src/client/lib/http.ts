@@ -9,18 +9,21 @@ export interface HttpError extends Error {
 async function request<T>(method: string, url: string, body?: any, opts: RequestInit = {}): Promise<T> {
   const init: RequestInit = {
     method,
-    headers: { 'Accept': 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers||{}) },
+    headers: { 'Accept': 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers || {}) },
     credentials: 'include',
     ...opts,
     body: body ? JSON.stringify(body) : undefined,
   };
+  console.log(`[http] ${method} ${url} from ${window.location.origin}`);
   const res = await fetch(url, init);
+  console.log(`[http] ${method} ${url} => ${res.status}`);
   const text = await res.text();
   let data: any = null;
   if (text) {
     try { data = JSON.parse(text); } catch { data = text; }
   }
   if (!res.ok) {
+    console.error(`[http] ${method} ${url} failed:`, res.status, data);
     const err: HttpError = Object.assign(new Error(`HTTP ${res.status}`), { status: res.status, data });
     throw err;
   }
@@ -31,8 +34,8 @@ export const http = {
   get: <T>(url: string, params?: Record<string, any>) => {
     if (params && Object.keys(params).length) {
       const usp = new URLSearchParams();
-      for (const [k,v] of Object.entries(params)) if (v!=null) usp.set(k,String(v));
-      url += (url.includes('?')?'&':'?') + usp.toString();
+      for (const [k, v] of Object.entries(params)) if (v != null) usp.set(k, String(v));
+      url += (url.includes('?') ? '&' : '?') + usp.toString();
     }
     return request<T>('GET', url);
   },

@@ -5,41 +5,59 @@ import { User } from "../models/User";
 import { getCachedEvents, setCachedEvents, createCacheKey } from "../cache";
 import { connect as connectMongo } from "../mongo";
 import { CalendarConfigModel } from "../models/CalendarConfig";
+import jwt from "jsonwebtoken";
 
 const router = Router();
-router.use(requireAuth);
+
+// Temporary state tokens for OAuth callbacks (short-lived, 10 minutes)
+const stateTokens = new Map<string, { userId: string; expires: number }>();
+
+// Cleanup expired state tokens every minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, data] of stateTokens.entries()) {
+    if (data.expires < now) stateTokens.delete(token);
+  }
+}, 60000);
 
 function requireAdmin(req: any, res: any, next: any) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "forbidden" });
   next();
 }
 
-// Start OAuth
-router.get("/auth/url", requireAdmin, async (_req, res) => {
+// Start OAuth - encode userId in state parameter for callback
+router.get("/auth/url", requireAuth, requireAdmin, async (req, res) => {
   const client = buildClient();
+  const userId = (req as any).user!.id;
+
+  // Generate a temporary state token
+  const stateToken = jwt.sign({ userId, rand: Math.random() }, process.env.JWT_SECRET || "dev-secret", { expiresIn: "10m" });
+  stateTokens.set(stateToken, { userId, expires: Date.now() + 10 * 60 * 1000 });
+
   const url = client.generateAuthUrl({
     access_type: "offline",
     scope: ["https://www.googleapis.com/auth/calendar.readonly"],
-  prompt: "consent",
-  include_granted_scopes: true as any,
+    prompt: "consent",
+    include_granted_scopes: true as any,
+    state: stateToken,
   });
   res.json({ url });
 });
 
 // OAuth callback stores tokens on the logged-in admin user
-router.post("/auth/callback", requireAdmin, async (req, res) => {
+router.post("/auth/callback", requireAuth, requireAdmin, async (req, res) => {
   const { code } = req.body || {};
   if (!code) return res.status(400).json({ error: "code_required" });
   const client = buildClient();
   try {
-  const { tokens } = await client.getToken(code);
-  console.log("[google] POST callback token keys:", Object.keys(tokens||{}), "hasRefresh=", !!tokens.refresh_token);
-  const user = await User.findById((req as any).user!.id);
+    const { tokens } = await client.getToken(code);
+    console.log("[google] POST callback token keys:", Object.keys(tokens || {}), "hasRefresh=", !!tokens.refresh_token);
+    const user = await User.findById((req as any).user!.id);
     if (!user) return res.status(404).json({ error: "user_not_found" });
     const existing: any = user.get("googleTokens") || {};
-  if (tokens.refresh_token) existing.refreshToken = tokens.refresh_token;
-  // Do NOT persist access token (ephemeral); force removal if previously stored
-  if (existing.accessToken) delete existing.accessToken;
+    if (tokens.refresh_token) existing.refreshToken = tokens.refresh_token;
+    // Do NOT persist access token (ephemeral); force removal if previously stored
+    if (existing.accessToken) delete existing.accessToken;
     if (tokens.expiry_date) existing.expiryDate = new Date(tokens.expiry_date);
     if (tokens.scope) existing.scope = tokens.scope;
     if (tokens.token_type) existing.tokenType = tokens.token_type;
@@ -53,19 +71,36 @@ router.post("/auth/callback", requireAdmin, async (req, res) => {
   }
 });
 
-// Support standard OAuth redirect (Google sends GET request with code)
-router.get("/auth/callback", requireAdmin, async (req, res) => {
+// Support standard OAuth redirect (Google sends GET request with code + state)
+// No auth required here - state parameter validates the request
+router.get("/auth/callback", async (req, res) => {
   const code = String((req.query as any).code || "").trim();
-  if (!code) return res.status(400).send("Missing code");
+  const state = String((req.query as any).state || "").trim();
+
+  if (!code) return res.status(400).send("Missing authorization code");
+  if (!state) return res.status(400).send("Missing state parameter");
+
+  // Validate state token
+  const stateData = stateTokens.get(state);
+  if (!stateData || stateData.expires < Date.now()) {
+    stateTokens.delete(state);
+    return res.status(401).send("Invalid or expired state token. Please try authorizing again.");
+  }
+
+  // Delete state token (one-time use)
+  stateTokens.delete(state);
+
   const client = buildClient();
   try {
-  const { tokens } = await client.getToken(code);
-  console.log("[google] GET callback token keys:", Object.keys(tokens||{}), "hasRefresh=", !!tokens.refresh_token);
-    const user = await User.findById((req as any).user!.id);
+    const { tokens } = await client.getToken(code);
+    console.log("[google] GET callback token keys:", Object.keys(tokens || {}), "hasRefresh=", !!tokens.refresh_token);
+
+    const user = await User.findById(stateData.userId);
     if (!user) return res.status(404).send("User not found");
+
     const existing: any = user.get("googleTokens") || {};
-  if (tokens.refresh_token) existing.refreshToken = tokens.refresh_token;
-  if (existing.accessToken) delete existing.accessToken;
+    if (tokens.refresh_token) existing.refreshToken = tokens.refresh_token;
+    if (existing.accessToken) delete existing.accessToken;
     if (tokens.expiry_date) existing.expiryDate = new Date(tokens.expiry_date);
     if (tokens.scope) existing.scope = tokens.scope;
     if (tokens.token_type) existing.tokenType = tokens.token_type;
@@ -73,16 +108,18 @@ router.get("/auth/callback", requireAdmin, async (req, res) => {
     user.set("googleTokens", existing);
     await user.save();
     console.log("[google] OAuth callback stored tokens (has refresh=", !!existing.refreshToken, ")");
-    // Redirect back to frontend admin panel (best-effort)
-    const redirect = process.env.FRONTEND_BASE_URL || "/";
-    res.redirect(redirect);
+
+    // Redirect back to frontend admin panel
+    const baseUrl = process.env.FRONTEND_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const redirectUrl = `${baseUrl}/profile?tab=calendar&google=success`;
+    res.redirect(redirectUrl);
   } catch (e: any) {
     console.error("[google] GET callback token exchange failed", e?.message || e);
-    res.status(500).send("Token exchange failed");
+    res.status(500).send("Token exchange failed: " + (e?.message || "Unknown error"));
   }
 });
 
-router.get("/status", requireAdmin, async (req, res) => {
+router.get("/status", requireAuth, requireAdmin, async (req, res) => {
   const user = await User.findById((req as any).user!.id);
   if (!user?.googleTokens?.refreshToken) return res.json({ connected: false });
   res.json({
@@ -93,9 +130,9 @@ router.get("/status", requireAdmin, async (req, res) => {
   });
 });
 
-router.get("/calendars", requireAdmin, async (req, res) => {
+router.get("/calendars", requireAuth, requireAdmin, async (req, res) => {
   try {
-  const client = await getAuthorizedClient((req as any).user!.id);
+    const client = await getAuthorizedClient((req as any).user!.id);
     if (!client) return res.status(400).json({ error: "not_authenticated" });
     const calendar = google.calendar({ version: "v3", auth: client });
     const list = await calendar.calendarList.list({ maxResults: 250 });
@@ -121,15 +158,15 @@ export async function getAuthorizedClient(userId?: string) {
     console.log("[google] No refresh token found for user:", userId);
     return null;
   }
-  
+
   const client = buildClient();
   const creds: any = {
     refresh_token: user.googleTokens.refreshToken,
   };
   if (user.googleTokens.scope) creds.scope = user.googleTokens.scope;
-  
+
   client.setCredentials(creds);
-  
+
   // Set up token refresh event handler
   client.on('tokens', async (tokens) => {
     console.log("[google] Tokens refreshed, updating user tokens");
@@ -142,7 +179,7 @@ export async function getAuthorizedClient(userId?: string) {
     }
     // Note: We don't persist access tokens, only refresh tokens
   });
-  
+
   try {
     // Force a token refresh to ensure we have a valid access token
     await client.getAccessToken();
@@ -151,7 +188,7 @@ export async function getAuthorizedClient(userId?: string) {
     console.error("[google] Failed to refresh access token:", error);
     return null;
   }
-  
+
   return client;
 }
 
@@ -196,10 +233,10 @@ router.get("/week", requireAdmin, async (req, res) => {
     const busyCalendars: string[] = configDoc ? configDoc.busyCalendars || [] : [];
     // If no config yet, we'll fallback later
     const calListResp = await calendar.calendarList.list({ maxResults: 250 });
-    const allGoogleCals = (calListResp.data.items || []).map((c:any)=> c.id).filter(Boolean);
-    let targetGoogleCals = allGoogleCals.map(id=> `google://${id}`);
+    const allGoogleCals = (calListResp.data.items || []).map((c: any) => c.id).filter(Boolean);
+    let targetGoogleCals = allGoogleCals.map(id => `google://${id}`);
     if (busyCalendars.length) {
-      targetGoogleCals = targetGoogleCals.filter(u=> busyCalendars.includes(u));
+      targetGoogleCals = targetGoogleCals.filter(u => busyCalendars.includes(u));
     }
     // BUG FIX: Don't revert to all calendars if none are in busy list
     // This was causing all Google calendars to be processed even when not configured as busy
@@ -221,7 +258,7 @@ router.get("/week", requireAdmin, async (req, res) => {
           const start = e.start?.dateTime || (e.start?.date ? e.start.date + "T00:00:00Z" : undefined);
           const end = e.end?.dateTime || (e.end?.date ? e.end.date + "T23:59:00Z" : undefined);
           if (!start) continue;
-          const calendarInfo = (calListResp.data.items || []).find(ci=> ci.id===calId);
+          const calendarInfo = (calListResp.data.items || []).find(ci => ci.id === calId);
           events.push({
             summary: e.summary || "(No Title)",
             start,
@@ -269,18 +306,18 @@ router.get("/all", requireAdmin, async (req, res) => {
     const configDoc: any = await CalendarConfigModel.findOne();
     const busyCalendars: string[] = configDoc ? configDoc.busyCalendars || [] : [];
     console.log(`[Google] /all DEBUG: busyCalendars.length = ${busyCalendars.length}, busyCalendars =`, busyCalendars);
-    
+
     // If no config yet, we'll fallback later
     const calListResp = await calendar.calendarList.list({ maxResults: 250 });
-    const allGoogleCals = (calListResp.data.items || []).map((c:any)=> c.id).filter(Boolean);
-    let targetGoogleCals = allGoogleCals.map(id=> `google://${id}`);
+    const allGoogleCals = (calListResp.data.items || []).map((c: any) => c.id).filter(Boolean);
+    let targetGoogleCals = allGoogleCals.map(id => `google://${id}`);
     console.log(`[Google] /all DEBUG: Initial targetGoogleCals =`, targetGoogleCals);
-    
+
     if (busyCalendars.length) {
-      targetGoogleCals = targetGoogleCals.filter(u=> busyCalendars.includes(u));
+      targetGoogleCals = targetGoogleCals.filter(u => busyCalendars.includes(u));
       console.log(`[Google] /all DEBUG: After filtering, targetGoogleCals =`, targetGoogleCals);
     }
-    
+
     // BUG FIX: Don't revert to all calendars if none are in busy list
     // This was causing all Google calendars to be processed even when not configured as busy
     // if (!targetGoogleCals.length) targetGoogleCals = allGoogleCals.map(id=> `google://${id}`);
@@ -294,7 +331,7 @@ router.get("/all", requireAdmin, async (req, res) => {
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
         const twoYearsFromNow = new Date();
         twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);
-        
+
         const resp = await calendar.events.list({
           calendarId: calId,
           timeMin: oneYearAgo.toISOString(),
@@ -307,8 +344,8 @@ router.get("/all", requireAdmin, async (req, res) => {
           const start = e.start?.dateTime || (e.start?.date ? e.start.date + "T00:00:00Z" : undefined);
           const end = e.end?.dateTime || (e.end?.date ? e.end.date + "T23:59:00Z" : undefined);
           if (!start) continue;
-          const calendarInfo = (calListResp.data.items || []).find(ci=> ci.id===calId);
-          
+          const calendarInfo = (calListResp.data.items || []).find(ci => ci.id === calId);
+
           const eventData: any = {
             summary: e.summary || "(No Title)",
             start,
@@ -323,12 +360,12 @@ router.get("/all", requireAdmin, async (req, res) => {
             color: configDoc?.calendarColors?.[`google://${calId}`] || '#4285f4',
             isRecurring: !!e.recurrence,
           };
-          
+
           // Include recurrence rules for recurring events
           if (e.recurrence && e.recurrence.length > 0) {
             eventData.recurrence = e.recurrence;
           }
-          
+
           events.push(eventData);
         }
       } catch (inner: any) {
