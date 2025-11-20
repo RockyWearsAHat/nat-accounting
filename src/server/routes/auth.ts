@@ -9,13 +9,13 @@ const router = Router();
 function getCookieDomainFromHost(hostname: string | undefined): string | undefined {
   if (!hostname) return undefined;
   const host = hostname.split(":")[0];
-  
+
   // For localhost and its subdomains, do NOT set domain (host-only cookies work better in browsers)
   // This is a known browser security limitation with .localhost domains
   if (host === "localhost" || host.endsWith(".localhost") || /\d+\.\d+\.\d+\.\d+/.test(host)) {
     return undefined;
   }
-  
+
   // For production domains (e.g., mayrconsultingservices.com), set domain for cross-subdomain sharing
   // This allows admin.domain.com and client.domain.com to share the same cookie
   const parts = host.split(".").filter(Boolean);
