@@ -21,7 +21,7 @@ Ensure that every component works together to build a complete well organized pi
 Build a premium, modern website inspired by the minimalist luxury feel of https://www.sagiagency.com/, but with far more creative freedom and visual experimentation.
 You may use advanced CSS techniques, unique interactions, micro-animations, and high-end visual polish — the vibe of Fireship’s clever micro-UI tricks and the silent Indian developer YouTubers who build insane CSS animations.
 
-### Color Palette
+### STYLING PATTERN
 
 Use ONLY the brand colors already defined above in the [color palette](#color-palette) section. Reference these with global css variables so they can be easily tuned later on.
 Every gradient, animation, and effect should derive from those colors — no unapproved hues.

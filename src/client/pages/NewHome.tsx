@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { NorthStarLogo } from '../components/NorthStarLogo';
@@ -7,6 +7,7 @@ import styles from './NewHome.module.css';
 gsap.registerPlugin(ScrollTrigger);
 
 const NewHome: React.FC = () => {
+  const founderImage = '/temp.JPG';
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -33,9 +34,118 @@ const NewHome: React.FC = () => {
   const companyInputRef = useRef<HTMLInputElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const aboutSectionRef = useRef<HTMLElement>(null);
+  const aboutImageRef = useRef<HTMLDivElement>(null);
+  const sourceImageRef = useRef<HTMLImageElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const credentialCardsRef = useRef<(HTMLDivElement | null)[]>([]);
   const serviceCardsRef = useRef<(HTMLDivElement | null)[]>([]);
   const scrollHintRef = useRef<HTMLDivElement>(null);
   const inactivityTimerRef = useRef<number | null>(null);
+  const hoverAnimationRef = useRef<number | null>(null);
+
+  const drawCanvas = useCallback((): void => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    const img = sourceImageRef.current;
+    const container = aboutImageRef.current;
+
+    if (!canvas || !ctx || !img || !container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = containerRect.width;
+    const height = containerRect.height;
+
+    if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+    }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, width, height);
+
+    const scale = 1.05;
+    const scaledWidth = width * scale;
+    const scaledHeight = height * scale;
+    const offsetX = (width - scaledWidth) / 2;
+    const offsetY = (height - scaledHeight) / 2;
+
+    const edgeInset = dpr > 1 ? 0.999 : 0.6;
+    const radiusInset = edgeInset;
+
+    const parseRadius = (value: string | null): number => {
+      if (!value) return 0;
+      const parsed = parseFloat(value);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    let hasOverlap = false;
+
+    credentialCardsRef.current.forEach((card) => {
+      if (!card) return;
+
+      const cardRect = card.getBoundingClientRect();
+      const intersectionLeft = Math.max(cardRect.left, containerRect.left);
+      const intersectionRight = Math.min(cardRect.right, containerRect.right);
+      const intersectionTop = Math.max(cardRect.top, containerRect.top);
+      const intersectionBottom = Math.min(cardRect.bottom, containerRect.bottom);
+
+      if (intersectionRight <= intersectionLeft || intersectionBottom <= intersectionTop) return;
+
+      const cardX = cardRect.left - containerRect.left + edgeInset;
+      const cardY = cardRect.top - containerRect.top + edgeInset;
+      const cardWidth = Math.max(0, cardRect.width - edgeInset * 2);
+      const cardHeight = Math.max(0, cardRect.height - edgeInset * 2);
+
+      const styles = getComputedStyle(card);
+      const radii = {
+        tl: Math.max(0, parseRadius(styles.borderTopLeftRadius) - radiusInset),
+        tr: Math.max(0, parseRadius(styles.borderTopRightRadius) - radiusInset),
+        br: Math.max(0, parseRadius(styles.borderBottomRightRadius) - radiusInset),
+        bl: Math.max(0, parseRadius(styles.borderBottomLeftRadius) - radiusInset)
+      };
+
+      const cardPath = new Path2D();
+      cardPath.moveTo(cardX + radii.tl, cardY);
+      cardPath.lineTo(cardX + cardWidth - radii.tr, cardY);
+      cardPath.quadraticCurveTo(cardX + cardWidth, cardY, cardX + cardWidth, cardY + radii.tr);
+      cardPath.lineTo(cardX + cardWidth, cardY + cardHeight - radii.br);
+      cardPath.quadraticCurveTo(cardX + cardWidth, cardY + cardHeight, cardX + cardWidth - radii.br, cardY + cardHeight);
+      cardPath.lineTo(cardX + radii.bl, cardY + cardHeight);
+      cardPath.quadraticCurveTo(cardX, cardY + cardHeight, cardX, cardY + cardHeight - radii.bl);
+      cardPath.lineTo(cardX, cardY + radii.tl);
+      cardPath.quadraticCurveTo(cardX, cardY, cardX + radii.tl, cardY);
+      cardPath.closePath();
+
+      const intersectionPath = new Path2D();
+      intersectionPath.rect(
+        intersectionLeft - containerRect.left,
+        intersectionTop - containerRect.top,
+        intersectionRight - intersectionLeft,
+        intersectionBottom - intersectionTop
+      );
+
+      ctx.save();
+      ctx.clip(cardPath);
+      ctx.clip(intersectionPath);
+      ctx.filter = 'blur(18px)';
+      ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+      ctx.restore();
+      hasOverlap = true;
+    });
+
+    if (!hasOverlap) {
+      ctx.clearRect(0, 0, width, height);
+    }
+
+    ctx.filter = 'none';
+  }, []);
+
+  const handleImageLoad = () => {
+    drawCanvas();
+  };
 
   useEffect(() => {
     if (!heroRef.current || !servicesRef.current || !heroTextRef.current || !heroLogoRef.current) return;
@@ -297,6 +407,28 @@ const NewHome: React.FC = () => {
       }
     });
 
+    const updateOverlays = () => {
+      drawCanvas();
+    };
+
+    window.addEventListener('scroll', updateOverlays, { passive: true });
+    window.addEventListener('resize', updateOverlays);
+    updateOverlays();
+
+    // Parallax scrolling for about section image
+    if (aboutSectionRef.current && aboutImageRef.current) {
+      gsap.to(aboutImageRef.current, {
+        y: 180,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: aboutSectionRef.current,
+          start: 'top 100%',
+          end: '+=180%',
+          scrub: true
+        }
+      });
+    }
+
     // Inactivity detection for scroll hint
     const hideScrollHint = () => {
       if (scrollHintRef.current) {
@@ -334,8 +466,56 @@ const NewHome: React.FC = () => {
       window.removeEventListener('scroll', hideScrollHint);
       window.removeEventListener('wheel', hideScrollHint);
       window.removeEventListener('touchmove', hideScrollHint);
+      window.removeEventListener('scroll', updateOverlays);
+      window.removeEventListener('resize', updateOverlays);
     };
-  }, []);
+  }, [drawCanvas]);
+
+  useEffect(() => {
+    const cards = credentialCardsRef.current.filter((card): card is HTMLDivElement => Boolean(card));
+    if (!cards.length) return;
+
+    const repaintDuringTransition = () => {
+      if (hoverAnimationRef.current) {
+        cancelAnimationFrame(hoverAnimationRef.current);
+      }
+
+      const durationMs = 400;
+      const start = performance.now();
+
+      const step = (now: number) => {
+        drawCanvas();
+        if (now - start < durationMs) {
+          hoverAnimationRef.current = requestAnimationFrame(step);
+        } else {
+          hoverAnimationRef.current = null;
+        }
+      };
+
+      hoverAnimationRef.current = requestAnimationFrame(step);
+    };
+
+    const handleTransitionEnd = () => {
+      drawCanvas();
+    };
+
+    cards.forEach((card) => {
+      card.addEventListener('mouseenter', repaintDuringTransition);
+      card.addEventListener('mouseleave', repaintDuringTransition);
+      card.addEventListener('transitionend', handleTransitionEnd);
+    });
+
+    return () => {
+      if (hoverAnimationRef.current) {
+        cancelAnimationFrame(hoverAnimationRef.current);
+      }
+      cards.forEach((card) => {
+        card.removeEventListener('mouseenter', repaintDuringTransition);
+        card.removeEventListener('mouseleave', repaintDuringTransition);
+        card.removeEventListener('transitionend', handleTransitionEnd);
+      });
+    };
+  }, [drawCanvas]);
 
   // Cursor-following effect for service cards
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>, index: number) => {
@@ -537,11 +717,32 @@ const NewHome: React.FC = () => {
       </section>
 
       {/* About Section */}
-      <section id="about" className={styles.about}>
+      <section id="about" className={styles.about} ref={aboutSectionRef}>
+        {/* Parallax Image with canvas blur mask */}
+        <div className={styles.parallaxImageContainer} ref={aboutImageRef}>
+          <img
+            ref={sourceImageRef}
+            src={founderImage}
+            alt="Natasha Mayr collaborating with a client"
+            className={styles.parallaxImage}
+            loading="lazy"
+            onLoad={handleImageLoad}
+          />
+          <div className={styles.canvasMask}>
+            <div className={styles.canvasClip}>
+              <canvas
+                ref={canvasRef}
+                width={560}
+                height={560}
+                className={styles.parallaxCanvas}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className={styles.aboutContainer}>
-        <div className={styles.aboutImage}>
-          <NorthStarLogo size={180} color="rgba(174, 191, 190, 0.3)" />
-        </div>          <div className={styles.aboutContent}>
+          {/* Text Content Block */}
+          <div className={styles.aboutContent}>
             <div className={styles.sectionLabel}>Meet the Founder</div>
             <h2 className={styles.sectionTitle}>Natasha Mayr</h2>
 
@@ -552,26 +753,33 @@ const NewHome: React.FC = () => {
             <p className={styles.aboutTextSecondary}>
               With deep experience in manufacturing and retail, plus a background at Deloitte, Natasha brings technical expertise and strategic insight to help businesses scale with confidence.
             </p>
+          </div>
 
-            <div className={styles.credentialsGrid}>
-              {[
-                { label: 'Education', value: 'B.S. Accounting\nUniversity of Utah' },
-                { label: 'Experience', value: 'Audit & Assurance\nDeloitte LLP' },
-                { label: 'Specialization', value: 'Manufacturing\nRetail' },
-                { label: 'Expertise', value: 'QuickBooks, Power BI\nFinancial Analytics' }
-              ].map((item, i) => (
-                <div key={i} className={styles.credentialItem}>
-                  <div className={styles.credentialLabel}>{item.label}</div>
-                  <div className={styles.credentialValue}>{item.value}</div>
-                </div>
-              ))}
-            </div>
+          {/* Credential Cards - Single Horizontal Row */}
+          <div className={styles.credentialsGrid}>
+            {[
+              { label: 'Education', value: 'B.S.\nAccounting', subtitle: 'University of Utah' },
+              { label: 'Experience', value: 'Audit &\nAssurance', subtitle: 'Deloitte LLP' },
+              { label: 'Expertise', value: 'QuickBooks\nPower BI', subtitle: 'Financial Analytics' },
+              { label: 'Certifications', value: 'CPA Track\nData Analytics', subtitle: 'Professional Development' }
+            ].map((item, i) => (
+              <div
+                key={i}
+                className={`${styles.credentialItem} credential-card-${i}`}
+                ref={(el) => (credentialCardsRef.current[i] = el)}
+              >
+                <div className={styles.credentialLabel}>{item.label}</div>
+                <div className={styles.credentialValue}>{item.value}</div>
+                <div className={styles.credentialSubtitle}>{item.subtitle}</div>
+              </div>
+            ))}
+          </div>
 
-            <div className={styles.quote}>
-              <p className={styles.quoteText}>
-                "I believe that when business owners truly understand their numbers, they unlock their potential—and that's what Lumina is all about."
-              </p>
-            </div>
+          {/* Quote at Bottom */}
+          <div className={styles.quote}>
+            <p className={styles.quoteText}>
+              "I believe that when business owners truly understand their numbers, they unlock their potential—and that's what Lumina is all about."
+            </p>
           </div>
         </div>
       </section>
