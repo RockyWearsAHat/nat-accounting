@@ -67,10 +67,24 @@ const NewHome: React.FC = () => {
     ctx.clearRect(0, 0, width, height);
 
     const scale = 1.05;
-    const scaledWidth = width * scale;
-    const scaledHeight = height * scale;
-    const offsetX = (width - scaledWidth) / 2;
-    const offsetY = (height - scaledHeight) / 2;
+    const naturalWidth = img.naturalWidth || width;
+    const naturalHeight = img.naturalHeight || height;
+    const imageRatio = naturalWidth / naturalHeight;
+    const containerRatio = width / height;
+
+    let drawWidth: number;
+    let drawHeight: number;
+
+    if (containerRatio > imageRatio) {
+      drawWidth = width * scale;
+      drawHeight = drawWidth / imageRatio;
+    } else {
+      drawHeight = height * scale;
+      drawWidth = drawHeight * imageRatio;
+    }
+
+    const offsetX = (width - drawWidth) / 2;
+    const offsetY = (height - drawHeight) / 2;
 
     const edgeInset = dpr > 1 ? 0.999 : 0.6;
     const radiusInset = edgeInset;
@@ -131,7 +145,7 @@ const NewHome: React.FC = () => {
       ctx.clip(cardPath);
       ctx.clip(intersectionPath);
       ctx.filter = 'blur(18px)';
-      ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       ctx.restore();
       hasOverlap = true;
     });
