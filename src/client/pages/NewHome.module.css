@@ -738,7 +738,7 @@ html {
   padding: 2rem;
   border-radius: 12px;
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(5px);
+  backdrop-filter: blur(20px);
   min-width: 200px;
   transition: all 0.3s ease;
 }
