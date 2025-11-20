@@ -759,13 +759,6 @@ const NewHome: React.FC = () => {
               </a>
             ))}
           </div>
-
-          <button
-            onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })}
-            className={styles.navButton}
-          >
-            Get Started
-          </button>
         </div>
       </nav>
 

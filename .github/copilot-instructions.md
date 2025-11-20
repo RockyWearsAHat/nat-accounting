@@ -26,6 +26,8 @@ You may use advanced CSS techniques, unique interactions, micro-animations, and 
 Use ONLY the brand colors already defined above in the [color palette](#color-palette) section. Reference these with global css variables so they can be easily tuned later on.
 Every gradient, animation, and effect should derive from those colors — no unapproved hues.
 
+FOR REFERENCE PLEASE SEE src/client/pages/NewHome.tsx & src/client/pages/NewHome.module.css FOR STYLING EXAMPLES AND GOOD DESIGN IMPLEMENTATIONS
+
 ### Design Philosophy
 
 Think:
@@ -1622,4 +1624,44 @@ AI-powered spreadsheet pricing engine backed by an Excel workbook (e.g., `Pricin
 - **Accurate Charge Timing**: chargeType ensures one-time fees go to correct subtotal regardless of descriptive billing label
 - **Future-Proof**: Can handle workbooks with different segment names, price point structures, and billing models without code changes
 - **Backward Compatible**: Legacy low/high/maintenance structure still supported via mapping layer in parser.ts
+---
+
+### Admin Access UX Refresh (Jan 2025)
+
+Purpose:
+Remove the dedicated `/admin` route and let admins switch between Admin Dashboard and Client View directly within `/profile`.
+
+Changes:
+- Admins land on `/profile` and see a two-button switcher: "Admin Dashboard" and "Client View".
+- Selection persists in `localStorage` under key `adminView`.
+- Visiting `admin.<domain>` defaults the switcher to Admin Dashboard; `client.<domain>` defaults to Client View.
+
+Implementation:
+- `AdminClientSwitcher` (inline in `src/client/pages/App.tsx`)
+  - Renders the switcher and toggles between `<AdminPanel />` and `<ClientProfile />`.
+  - No props; relies on authenticated `user` from App state.
+
+Routing:
+- `/admin` route removed.
+- `/profile` now hosts both admin and client experiences (admin-gated).
+- Subdomain root redirects: `admin.*` and `client.*` both redirect to `/profile` with default view set accordingly.
+
+Header Navigation:
+- Shows a single `/profile` link for authenticated users (label "Profile" for admins, "My Profile" for standard users).
+
+---
+
+### Cross-Subdomain Auth & CORS (Jan 2025)
+
+Updates:
+- CORS (`src/server/index.ts`):
+  - Allows `http://localhost:4000`, `http://localhost:5173`.
+  - Allows any `*.localhost:<port>` (e.g., `admin.localhost:4000`, `client.localhost:4000`).
+  - Allows any subdomain of `mayrconsultingservices.com`.
+  - Includes `https://mayraccountingservices.netlify.app`.
+  - `credentials: true` kept; reduces noisy dev logs; blocks true unknown origins in production.
+- Cookie Domain (`src/server/routes/auth.ts`):
+  - Sets cookie domain to `.localhost` for hosts ending with `localhost`, enabling cookie sharing across `admin.localhost` and `client.localhost`.
+  - Keeps host-only cookies for bare `localhost` and IPs.
+
 ---

@@ -83,6 +83,7 @@ html {
   display: flex;
   gap: 2.5rem;
   align-items: center;
+  margin-left: auto; /* push links to the right */
 }
 
 .navLink {

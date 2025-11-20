@@ -16,28 +16,38 @@ app.use(cors({
     origin: string | undefined,
     callback: (err: Error | null, allow?: boolean) => void
   ) {
-    // Allow requests with no origin (e.g., mobile apps, Postman) only in development
+    // Allow requests with no origin (e.g., curl, Postman) in development
     if (!origin && process.env.NODE_ENV !== "production") {
       return callback(null, true);
     }
 
-    // Define allowed origins (your domains)
-    const allowedOrigins = [
-      "http://localhost:4000", // Local
-      "http://localhost:5173", // Vite dev server
-      "https://mayraccountingservices.netlify.app", // Netlify domain
-      "https://mayrconsultingservices.com"
+    const exactAllowList = new Set<string>([
+      "http://localhost:4000",
+      "http://localhost:5173",
+      "https://mayraccountingservices.netlify.app",
+      "https://mayrconsultingservices.com",
+    ]);
+
+    const regexAllowList: RegExp[] = [
+      // Allow any subdomain of localhost on common dev ports (e.g., admin.localhost:4000)
+      /^https?:\/\/([a-z0-9-]+\.)?localhost(?::\d+)?$/i,
+      // Allow any subdomain of production domain
+      /^https?:\/\/([a-z0-9-]+\.)?mayrconsultingservices\.com$/i,
     ];
 
-    if (origin && allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn(`🚨 CORS blocked request from: ${origin || "unknown"}`);
-      callback(null, true); // Allow for now during development
+    const isAllowed = !!origin && (
+      exactAllowList.has(origin) || regexAllowList.some((re) => re.test(origin))
+    );
+
+    if (isAllowed) {
+      return callback(null, true);
     }
+
+    console.warn(`🚨 CORS blocked request from: ${origin || "unknown"}`);
+    callback(null, false);
   },
-  credentials: true, // Allow cookies/auth headers
-  optionsSuccessStatus: 200, // Support legacy browsers
+  credentials: true,
+  optionsSuccessStatus: 200,
 }));
 
 // Cookie parser for HttpOnly cookies
