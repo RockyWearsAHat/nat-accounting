@@ -64,14 +64,7 @@ function convertToTimezone(utcDate: Date, timezone: string): Date {
 // --------------------------------------
 // (LoginPage & RegisterPage now externalized as components)
 
-const ProtectedRoute: React.FC<{
-  user: User | null;
-  children: React.ReactElement;
-}> = ({ user, children }) => {
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== "admin") return <Navigate to="/" replace />;
-  return children;
-};
+// (ProtectedRoute no longer used since /admin route is removed)
 
 const ClientRoute: React.FC<{
   user: User | null;
@@ -358,22 +351,12 @@ const Layout: React.FC<{
                 }}>
                   {user.email} <span style={{ color: "var(--color-accent-blue)" }}>({user.role})</span>
                 </span>
-                {user.role === "admin" && (
-                  <>
-                    <span style={{ color: "var(--color-text-tertiary)" }}>|</span>
-                    <Link to="/admin" style={navLink}>
-                      Admin
-                    </Link>
-                  </>
-                )}
-                {user.role === "user" && (
-                  <>
-                    <span style={{ color: "var(--color-text-tertiary)" }}>|</span>
-                    <Link to="/profile" style={navLink}>
-                      My Profile
-                    </Link>
-                  </>
-                )}
+                <>
+                  <span style={{ color: "var(--color-text-tertiary)" }}>|</span>
+                  <Link to="/profile" style={navLink}>
+                    {user.role === "admin" ? "Profile" : "My Profile"}
+                  </Link>
+                </>
                 <button onClick={onLogout} style={logoutBtn}>
                   Logout
                 </button>
@@ -406,7 +389,18 @@ const Layout: React.FC<{
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true); // Track auth check loading
+  const [adminView, setAdminView] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("adminView");
+      if (saved === null) return false;
+      return saved === "true";
+    } catch {
+      return false;
+    }
+  });
   const navigate = useNavigate();
+  const location = useLocation();
 
   const logout = async () => {
   await http.post("/api/auth/logout");
@@ -418,54 +412,193 @@ export const App: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-  const data = await http.get<any>("/api/auth/me");
-  if (data.user) setUser(data.user);
-      } catch {}
+        console.log('[Auth] Checking authentication status...');
+        const data = await http.get<any>("/api/auth/me");
+        console.log('[Auth] Response from /api/auth/me:', data);
+        if (data.user) {
+          console.log('[Auth] User authenticated:', data.user);
+          setUser(data.user);
+        } else {
+          console.log('[Auth] No user found in response');
+        }
+      } catch (error) {
+        console.error('[Auth] Error checking authentication:', error);
+      }
+      finally {
+        console.log('[Auth] Auth check complete, setting authLoading to false');
+        setAuthLoading(false); // Auth check complete
+      }
     })();
   }, []);
+
+  // Subdomain-aware behavior: redirect admins from client subdomain to admin subdomain
+  useEffect(() => {
+    const host = window.location.hostname || "";
+    
+    // If admin user is on client subdomain, redirect to admin subdomain
+    if (user?.role === "admin" && host.startsWith("client.")) {
+      const adminUrl = window.location.href.replace("client.", "admin.");
+      window.location.href = adminUrl;
+      return;
+    }
+    
+    // Set default view based on subdomain when at root
+    const atRoot = location.pathname === "/" || location.pathname === "";
+    if (!atRoot) return;
+    
+    if (host.startsWith("admin.")) {
+      try { localStorage.setItem("adminView", "true"); } catch {}
+    } else if (host.startsWith("client.")) {
+      try { localStorage.setItem("adminView", "false"); } catch {}
+    }
+  }, [location.pathname, navigate, user]);
+
+  // Keep adminView persisted
+  useEffect(() => {
+    try { localStorage.setItem("adminView", adminView ? "true" : "false"); } catch {}
+  }, [adminView]);
+
+  // Simple view switcher for admins
+  const AdminClientSwitcher: React.FC<{ user: User }> = ({ user }) => {
+    const isAdmin = user.role === "admin";
+    if (!isAdmin) return <ClientProfile />;
+    return (
+      <div style={{ width: "100%" }}>
+        {/* View Toggle - Minimal Style */}
+        <div style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+          background: "rgba(10, 10, 15, 0.95)",
+          backdropFilter: "blur(20px)",
+          borderBottom: "1px solid rgba(180, 180, 200, 0.08)",
+          padding: "1rem 2rem",
+          display: "flex",
+          justifyContent: "flex-end",
+        }}>
+          <div style={{
+            display: "inline-flex",
+            background: "rgba(26, 26, 36, 0.5)",
+            border: "1px solid rgba(180, 180, 200, 0.1)",
+            borderRadius: "8px",
+            overflow: "hidden",
+          }}>
+            <button
+              onClick={() => setAdminView(true)}
+              style={{
+                padding: "0.75rem 1.5rem",
+                cursor: "pointer",
+                background: adminView ? "#798C8C" : "transparent",
+                color: "#ffffff",
+                border: "none",
+                fontWeight: 500,
+                fontSize: "0.9375rem",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Admin
+            </button>
+            <div style={{
+              width: "1px",
+              background: "rgba(180, 180, 200, 0.1)",
+            }} />
+            <button
+              onClick={() => setAdminView(false)}
+              style={{
+                padding: "0.75rem 1.5rem",
+                cursor: "pointer",
+                background: !adminView ? "#798C8C" : "transparent",
+                color: "#ffffff",
+                border: "none",
+                fontWeight: 500,
+                fontSize: "0.9375rem",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Client
+            </button>
+          </div>
+        </div>
+        
+        {/* Content - Fullscreen */}
+        {adminView ? (
+          <AdminPanel user={user} onLogout={logout} />
+        ) : (
+          <ClientProfile />
+        )}
+      </div>
+    );
+  };
+
+  // Determine which homepage to show based on subdomain and user
+  const getHomepage = () => {
+    const host = window.location.hostname || "";
+    
+    // Admin subdomain shows admin dashboard with toggle or login
+    if (host.startsWith("admin.")) {
+      if (!user) return <LoginForm onAuth={(u)=>setUser(u)} />;
+      return user.role === "admin" ? <AdminClientSwitcher user={user} /> : <Navigate to="/" replace />;
+    }
+    
+    // Client subdomain shows client portal or login
+    if (host.startsWith("client.")) {
+      if (!user) return <LoginForm onAuth={(u)=>setUser(u)} />;
+      return <ClientProfile />;
+    }
+    
+    // Default domain shows public homepage or admin panel for logged-in admins
+    if (user?.role === "admin") {
+      return <AdminClientSwitcher user={user} />;
+    }
+    if (user) {
+      return <ClientProfile />;
+    }
+    return <NewHome />;
+  };
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "100vh",
+        background: "var(--color-bg-primary)",
+        color: "var(--color-text-primary)",
+      }}>
+        <div style={{
+          textAlign: "center",
+        }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            border: "4px solid var(--color-bg-tertiary)",
+            borderTop: "4px solid var(--color-accent-blue)",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite",
+            margin: "0 auto var(--space-md)",
+          }} />
+          <p style={{ fontSize: "var(--font-size-lg)" }}>Loading...</p>
+        </div>
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <Routes>
       <Route
         path="/"
-        element={<NewHome />}
+        element={getHomepage()}
       />
-      <Route
-        path="/login"
-        element={
-          <Layout user={user} onLogout={logout}>
-            <LoginForm onAuth={(u) => setUser(u)} />
-          </Layout>
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          <Layout user={user} onLogout={logout}>
-            <RegisterForm onAuth={(u) => setUser(u)} />
-          </Layout>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <Layout user={user} onLogout={logout}>
-            <ProtectedRoute user={user}>
-              <AdminPanel user={user as User} onLogout={logout} />
-            </ProtectedRoute>
-          </Layout>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <Layout user={user} onLogout={logout}>
-            <ClientRoute user={user}>
-              <ClientProfile />
-            </ClientRoute>
-          </Layout>
-        }
-      />
+      <Route path="/login" element={<LoginForm onAuth={(u)=>setUser(u)} />} />
+      <Route path="/register" element={<RegisterForm onAuth={(u)=>setUser(u)} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -6,6 +6,26 @@ import { User } from "../models/User.js";
 
 const router = Router();
 
+function getCookieDomainFromHost(hostname: string | undefined): string | undefined {
+  if (!hostname) return undefined;
+  const host = hostname.split(":")[0];
+  
+  // For localhost and its subdomains, do NOT set domain (host-only cookies work better in browsers)
+  // This is a known browser security limitation with .localhost domains
+  if (host === "localhost" || host.endsWith(".localhost") || /\d+\.\d+\.\d+\.\d+/.test(host)) {
+    return undefined;
+  }
+  
+  // For production domains (e.g., mayrconsultingservices.com), set domain for cross-subdomain sharing
+  // This allows admin.domain.com and client.domain.com to share the same cookie
+  const parts = host.split(".").filter(Boolean);
+  if (parts.length >= 2) {
+    const base = parts.slice(-2).join(".");
+    return `.${base}`;
+  }
+  return undefined;
+}
+
 const baseRegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -66,10 +86,14 @@ router.post("/login", async (req, res) => {
   const token = jwt.sign(payload, process.env.JWT_SECRET || "devsecret", {
     expiresIn: "8h",
   });
+  const cookieDomain = getCookieDomainFromHost(req.headers.host);
+  const isProduction = process.env.NODE_ENV === "production";
+  console.log('[Auth] Setting cookie - Host:', req.headers.host, 'Domain:', cookieDomain, 'SameSite:', isProduction ? 'none' : 'lax', 'Secure:', isProduction);
   res.cookie("token", token, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false,
+    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction,
+    domain: cookieDomain,
   });
   res.json({ ok: true, user: payload });
 });
@@ -77,22 +101,31 @@ router.post("/login", async (req, res) => {
 // Session restore
 router.get("/me", async (req, res) => {
   const token = req.cookies?.token;
+  console.log('[Auth] /me endpoint - Host:', req.headers.host, 'Has token:', !!token, 'All cookies:', Object.keys(req.cookies || {}));
   if (!token) return res.json({ user: null });
   try {
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET || "devsecret"
     ) as any;
+    console.log('[Auth] /me endpoint - Token verified, user:', decoded.email);
     res.json({
       user: { id: decoded.id, email: decoded.email, role: decoded.role },
     });
-  } catch {
+  } catch (error: any) {
+    if (error.name === 'TokenExpiredError') {
+      console.log('[Auth] Token expired, clearing cookie');
+      res.clearCookie('token', { domain: getCookieDomainFromHost(req.headers.host) });
+    } else {
+      console.log('[Auth] /me endpoint - Token verification failed:', error);
+    }
     res.json({ user: null });
   }
 });
 
 router.post("/logout", (req, res) => {
-  res.clearCookie("token");
+  const cookieDomain = getCookieDomainFromHost(req.headers.host);
+  res.clearCookie("token", { domain: cookieDomain });
   res.json({ ok: true });
 });
 

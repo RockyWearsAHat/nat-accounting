@@ -1,83 +1,69 @@
-/* AdminPanel.module.css - Neobrutalism + Glassmorphism Design */
+/* AdminPanel.module.css - Professional Dark Theme */
 
 .adminContainer {
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: var(--space-2xl);
+  padding: 2rem 3rem;
 }
 
 .header {
-  margin-bottom: var(--space-3xl);
-  text-align: center;
-  position: relative;
+  margin-bottom: 3rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid rgba(180, 180, 200, 0.08);
 }
 
 .headerTitle {
-  font-family: var(--font-display);
-  font-size: var(--font-size-5xl);
-  font-weight: var(--font-weight-black);
-  letter-spacing: var(--letter-spacing-tight);
-  text-transform: uppercase;
-  margin-bottom: var(--space-md);
-  background: linear-gradient(135deg, var(--color-accent-blue) 0%, var(--color-accent-purple) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+  color: #ffffff;
 }
 
 .headerSubtitle {
-  font-size: var(--font-size-lg);
-  color: var(--color-text-secondary);
-  font-weight: var(--font-weight-normal);
+  font-size: 1.125rem;
+  color: #b4b4c8;
+  font-weight: 400;
 }
 
-/* Tab Navigation - Neobrutalism Style */
+/* Tab Navigation - Clean Professional Style */
 .tabNav {
   display: flex;
-  gap: var(--space-md);
-  margin-bottom: var(--space-3xl);
-  flex-wrap: wrap;
-  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 3rem;
+  border-bottom: 1px solid rgba(180, 180, 200, 0.08);
+  padding-bottom: 0;
+  overflow-x: auto;
 }
 
 .tab {
-  padding: var(--space-md) var(--space-xl);
-  background: var(--color-bg-tertiary);
-  border: var(--border-width-thick) solid var(--border-color-subtle);
-  color: var(--color-text-secondary);
-  font-family: var(--font-display);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-wide);
+  padding: 1rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #b4b4c8;
+  font-size: 0.9375rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
-  border-radius: var(--radius-brutal);
-  box-shadow: 3px 3px 0 var(--border-color-subtle);
+  transition: all 0.3s ease;
+  white-space: nowrap;
 }
 
 .tab:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 var(--border-color-subtle);
-  color: var(--color-text-primary);
+  color: #ffffff;
+  background: rgba(121, 140, 140, 0.05);
 }
 
 .tabActive {
-  background: var(--color-accent-blue);
-  border-color: var(--color-text-primary);
-  color: var(--color-text-inverse);
-  box-shadow: 5px 5px 0 var(--color-text-primary);
-}
-
-.tabActive:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 8px 8px 0 var(--color-text-primary);
+  color: #ffffff;
+  border-bottom-color: #798C8C;
+  background: transparent;
 }
 
 /* Content Sections */
 .tabContent {
-  animation: fadeIn var(--transition-base);
+  animation: fadeIn 0.3s ease;
 }
 
 @keyframes fadeIn {
@@ -91,39 +77,120 @@
   }
 }
 
-/* Settings Card */
+/* Settings Cards - Glassmorphism Style */
 .settingsCard {
-  background: var(--glass-bg-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: var(--border-width-thick) solid var(--border-color-primary);
-  border-radius: var(--radius-lg);
-  padding: var(--space-2xl);
-  margin-bottom: var(--space-xl);
-  box-shadow: var(--shadow-brutal-lg);
+  background: rgba(26, 26, 36, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(180, 180, 200, 0.1);
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
 }
 
 .settingsCard h3 {
-  font-family: var(--font-display);
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-lg);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-wide);
-  border-bottom: var(--border-width-medium) solid var(--border-color-primary);
-  padding-bottom: var(--space-md);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(180, 180, 200, 0.08);
 }
 
 .settingsCard h4 {
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-accent-blue);
-  margin-top: var(--space-xl);
-  margin-bottom: var(--space-md);
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #798C8C;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Calendar Grid */
+.calendarsWrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.calendarChip {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(19, 19, 26, 0.5);
+  border: 1px solid rgba(180, 180, 200, 0.08);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.calendarChip:hover {
+  border-color: #798C8C;
+  background: rgba(19, 19, 26, 0.8);
+}
+
+.calendarChip input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #798C8C;
+}
+
+.calendarChip input[type="color"] {
+  width: 50px;
+  height: 35px;
+  border: 1px solid rgba(180, 180, 200, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.calName {
+  flex: 1;
+  font-weight: 500;
+  color: #ffffff;
+  font-size: 0.9375rem;
+}
+
+.statusTag {
+  padding: 0.25rem 0.75rem;
+  background: #798C8C;
+  color: #ffffff;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-wide);
+  letter-spacing: 0.05em;
+}
+
+.statusTag[data-status="hidden"] {
+  background: rgba(180, 180, 200, 0.1);
+  color: #6a6a7a;
+}
+
+/* UID Groups */
+.uidGroups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.uidGroups > div {
+  padding: 1.5rem;
+  background: rgba(19, 19, 26, 0.5);
+  border: 1px solid rgba(180, 180, 200, 0.08);
+  border-radius: 8px;
+}
+
+.uidGroups strong {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #798C8C;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* Calendar Grid */
