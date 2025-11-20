@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { ClientModel } from '../models/Client.js';
+import { ClientMemberModel } from '../models/ClientMember.js';
+import { sendClientInviteEmail } from '../services/MailService.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -160,3 +162,73 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
 });
 
 export default router;
+
+// --- Client Members Management (admin-only) ---
+
+// GET /api/clients/:id/members - list members
+router.get('/:id/members', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const clientId = req.params.id;
+        const members = await ClientMemberModel.find({ clientId }).sort({ invitedAt: -1 }).lean();
+        res.json({ members });
+    } catch (err) {
+        console.error('Error fetching client members:', err);
+        res.status(500).json({ error: 'Failed to fetch members' });
+    }
+});
+
+// POST /api/clients/:id/invite - invite a member by email
+router.post('/:id/invite', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const clientId = req.params.id;
+        const { email, role } = req.body as { email?: string; role?: 'admin' | 'member' };
+        if (!email) return res.status(400).json({ error: 'Email is required' });
+
+        const client = await ClientModel.findById(clientId).select('name');
+        if (!client) return res.status(404).json({ error: 'Client not found' });
+
+        const normalizedEmail = String(email).toLowerCase().trim();
+
+        const member = await ClientMemberModel.findOneAndUpdate(
+            { clientId, email: normalizedEmail },
+            {
+                $setOnInsert: { invitedAt: new Date() },
+                $set: {
+                    role: role === 'admin' ? 'admin' : 'member',
+                    status: 'invited',
+                    invitedBy: (req as any).user?._id || null,
+                },
+            },
+            { upsert: true, new: true }
+        ).lean();
+
+        // Build invite link to registration flow with prefill
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const inviteLink = `${baseUrl}/register?clientId=${clientId}&email=${encodeURIComponent(normalizedEmail)}`;
+
+        // Send email (best-effort)
+        try {
+            await sendClientInviteEmail({ to: normalizedEmail, clientName: client.name, inviteLink });
+        } catch (e) {
+            console.warn('Invite email could not be sent:', (e as Error).message);
+        }
+
+        res.status(201).json({ member });
+    } catch (err) {
+        console.error('Error inviting client member:', err);
+        res.status(500).json({ error: 'Failed to invite member' });
+    }
+});
+
+// DELETE /api/clients/:id/members/:memberId - revoke/remove a member
+router.delete('/:id/members/:memberId', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const { id: clientId, memberId } = req.params as { id: string; memberId: string };
+        const deleted = await ClientMemberModel.findOneAndDelete({ _id: memberId, clientId });
+        if (!deleted) return res.status(404).json({ error: 'Member not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error deleting client member:', err);
+        res.status(500).json({ error: 'Failed to delete member' });
+    }
+});

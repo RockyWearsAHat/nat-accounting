@@ -206,8 +206,15 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
     <div className={styles.adminContainer}>
       {/* Header */}
       <div className={styles.header}>
-        <h1 className={styles.headerTitle}>Admin Dashboard</h1>
-        <p className={styles.headerSubtitle}>Manage your business operations & client services</p>
+        <div className={styles.headerContent}>
+          <div>
+            <h1 className={styles.headerTitle}>Admin Dashboard</h1>
+            <p className={styles.headerSubtitle}>Manage your business operations & client services</p>
+          </div>
+          <button className="btn btn--outline" onClick={onLogout}>
+            Logout
+          </button>
+        </div>
       </div>
 
       {/* Tab Navigation - Neobrutalism Style */}
@@ -255,11 +262,6 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
         {/* Calendar Tab */}
         {activeTab === "calendar" && (
           <>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-xl)' }}>
-              <button className={styles.btnPrimary} onClick={() => setShowScheduleModal(true)}>
-                ➕ Schedule Appointment
-              </button>
-            </div>
             <ScheduleAppointmentModal
               open={showScheduleModal}
               onClose={() => setShowScheduleModal(false)}
@@ -273,16 +275,21 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
               }}
             />
             <CalendarEventsProvider>
-              <div className={styles.settingsCard}>
-                <h3>📅 Calendar Display</h3>
-              </div>
-              
-              <div style={{ marginTop: 'var(--space-xl)' }}>
-                <WeeklyCalendar 
-                  config={config} 
-                  hours={hours} 
+              <div className={styles.calendarContainer}>
+                <WeeklyCalendar
+                  config={config}
+                  hours={hours}
                   onConfigRefresh={loadConfig}
-                  onConsultationUpdate={() => {}} // No consultations in admin panel
+                  onConsultationUpdate={() => {}}
+                  headerRight={
+                    <button
+                      className="btn btn--primary"
+                      onClick={() => setShowScheduleModal(true)}
+                      aria-label="Schedule appointment"
+                    >
+                      + Schedule Appointment
+                    </button>
+                  }
                 />
               </div>
             </CalendarEventsProvider>
@@ -347,7 +354,7 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
                         <p className={styles.smallMuted}>
                           ⚠️ Token expired ({googleStatus.expires && new Date(googleStatus.expires).toLocaleString()})
                         </p>
-                        <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.btnPrimary}>
+                        <button disabled={connectingGoogle} onClick={startGoogleAuth} className="btn btn--primary">
                           {connectingGoogle ? 'Redirecting…' : 'Reauthorize Google Calendar'}
                         </button>
                       </>
@@ -359,14 +366,14 @@ export const AdminPanel: React.FC<{ user:User; onLogout:()=>void; }> = ({ user, 
                         ✅ Connected. Tokens stored for admin user
                         {googleStatus.expires && ` (expires: ${new Date(googleStatus.expires).toLocaleString()})`}
                       </p>
-                      <button onClick={loadConfig} className={styles.btnSecondary}>
+                      <button onClick={loadConfig} className="btn btn--outline">
                         Reload Google Calendars
                       </button>
                     </>
                   );
                 })()
               ) : (
-                <button disabled={connectingGoogle} onClick={startGoogleAuth} className={styles.btnPrimary}>
+                <button disabled={connectingGoogle} onClick={startGoogleAuth} className="btn btn--primary">
                   {connectingGoogle? 'Redirecting…':'Connect Google Calendar'}
                 </button>
               )}

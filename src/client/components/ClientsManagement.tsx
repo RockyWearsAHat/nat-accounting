@@ -19,6 +19,12 @@ export const ClientsManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [selectedClientForMembers, setSelectedClientForMembers] = useState<Client | null>(null);
+  const [members, setMembers] = useState<Array<{ _id: string; email: string; role: 'admin'|'member'; status: string; invitedAt: string }>>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<'admin'|'member'>('member');
   const [formData, setFormData] = useState({
     name: '',
     website: '',
@@ -43,6 +49,66 @@ export const ClientsManagement: React.FC = () => {
       alert('Failed to load clients');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openMembersModal = async (client: Client) => {
+    setSelectedClientForMembers(client);
+    setShowMembersModal(true);
+    setInviteEmail("");
+    setInviteRole('member');
+    try {
+      setMembersLoading(true);
+      const res = await http.get<{ members: Array<{ _id: string; email: string; role: 'admin'|'member'; status: string; invitedAt: string }> }>(`/api/clients/${client._id}/members`);
+      setMembers(res.members);
+    } catch (err) {
+      console.error('Error loading members:', err);
+      alert('Failed to load client members');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const inviteMember = async () => {
+    if (!selectedClientForMembers) return;
+    if (!inviteEmail.trim()) {
+      alert('Please enter an email');
+      return;
+    }
+    try {
+      setMembersLoading(true);
+      const res = await http.post<{ member: { _id: string; email: string; role: 'admin'|'member'; status: string; invitedAt: string } }>(`/api/clients/${selectedClientForMembers._id}/invite`, {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      // Prepend or update list
+      setMembers((prev) => {
+        const idx = prev.findIndex((m) => m._id === res.member._id);
+        if (idx >= 0) {
+          const cp = prev.slice();
+          cp[idx] = res.member;
+          return cp;
+        }
+        return [res.member, ...prev];
+      });
+      setInviteEmail("");
+    } catch (err) {
+      console.error('Error inviting member:', err);
+      alert('Failed to invite member');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const removeMember = async (memberId: string) => {
+    if (!selectedClientForMembers) return;
+    if (!confirm('Remove this member from the client?')) return;
+    try {
+      await http.del(`/api/clients/${selectedClientForMembers._id}/members/${memberId}`);
+      setMembers((prev) => prev.filter((m) => m._id !== memberId));
+    } catch (err) {
+      console.error('Error removing member:', err);
+      alert('Failed to remove member');
     }
   };
 
@@ -182,6 +248,9 @@ export const ClientsManagement: React.FC = () => {
               <button onClick={() => handleEdit(client)} className={styles.editButton}>
                 Edit
               </button>
+              <button onClick={() => openMembersModal(client)} className="btn btn--outline">
+                Manage Users
+              </button>
               <button onClick={() => handleDelete(client._id)} className={styles.deleteButton}>
                 Delete
               </button>
@@ -277,6 +346,65 @@ export const ClientsManagement: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showMembersModal && selectedClientForMembers && (
+        <div className={styles.modal}>
+          <div className={styles.modalContent}>
+            <h3>Manage Users – {selectedClientForMembers.name}</h3>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              <input
+                type="email"
+                className={styles.input}
+                placeholder="user@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <select
+                className={styles.input}
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as 'admin'|'member')}
+                style={{ width: 140 }}
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button className="btn btn--primary" onClick={inviteMember} disabled={membersLoading}>
+                {membersLoading ? 'Inviting...' : 'Invite'}
+              </button>
+            </div>
+
+            <div>
+              {membersLoading && members.length === 0 ? (
+                <div className={styles.loading}>Loading members...</div>
+              ) : (
+                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                  {members.map((m) => (
+                    <div key={m._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.75rem 1rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: '#fff', fontWeight: 600 }}>{m.email}</span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                          Role: {m.role} • Status: {m.status} • Invited {new Date(m.invitedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="btn btn--danger" onClick={() => removeMember(m._id)}>Remove</button>
+                      </div>
+                    </div>
+                  ))}
+                  {members.length === 0 && !membersLoading && (
+                    <div className={styles.loading}>No users yet. Invite someone above.</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button className="btn" onClick={() => { setShowMembersModal(false); setSelectedClientForMembers(null); }}>Close</button>
+            </div>
           </div>
         </div>
       )}

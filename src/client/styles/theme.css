@@ -11,12 +11,12 @@
 
 :root {
   /* ========================================
-     BASE COLORS - Dark Mode (Deep Blue Tones)
+     BASE COLORS - Dark Mode (Pure Dark)
      ======================================== */
-  --color-bg-primary: #0a0f1a;           /* Deep blue-black */
-  --color-bg-secondary: #0f1420;         /* Slightly lighter blue */
-  --color-bg-tertiary: #141a28;          /* Card/section backgrounds with blue */
-  --color-bg-elevated: #1a2030;          /* Elevated elements */
+  --color-bg-primary: #0a0a0f;           /* Pure dark matching NewHome */
+  --color-bg-secondary: #13131a;         /* Slightly lighter */
+  --color-bg-tertiary: #1a1a24;          /* Card/section backgrounds */
+  --color-bg-elevated: #21212e;          /* Elevated elements */
   
   /* ========================================
      TEXT COLORS
@@ -40,6 +40,11 @@
   --color-accent-purple: #aa00ff;        /* Electric purple */
   --color-accent-green: #00ff88;         /* Neon green */
   --color-accent-yellow: #ffdd00;        /* Bright yellow */
+  
+  /* Teal accent (NewHome) */
+  --color-accent-teal: #798C8C;          /* Muted teal */
+  --color-accent-teal-light: #AEBFBE;    /* Teal light */
+  --color-accent-teal-glow: rgba(121,140,140,0.25);
   
   /* ========================================
      SEMANTIC COLORS
@@ -213,6 +218,36 @@ body {
 /* ========================================
    UTILITY CLASSES
    ======================================== */
+
+/* Button utilities (global, minimal) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, box-shadow .2s ease, transform .15s ease;
+  border: 0;
+}
+
+.btn--primary {
+  background: var(--color-accent-teal);
+  color: #ffffff;
+  box-shadow: 0 8px 24px var(--color-accent-teal-glow);
+}
+.btn--primary:hover { background: var(--color-accent-teal-light); transform: translateY(-1px); }
+.btn--primary:active { transform: translateY(0); }
+
+.btn--danger { background: var(--color-error); color: #0a0a0f; box-shadow: 0 8px 24px rgba(255,0,85,0.22); }
+.btn--danger:hover { background: #ff4d88; }
+
+.btn--outline { background: transparent; color: var(--color-accent-teal); border: 1px solid var(--color-accent-teal); }
+.btn--outline:hover { background: rgba(121,140,140,0.1); }
 
 /* Glassmorphism card */
 .glass-card {

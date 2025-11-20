@@ -201,3 +201,48 @@ export async function sendInvoiceEmail(payload: InvoiceEmailPayload): Promise<vo
 }
 
 export { isEmailConfigured };
+
+// --- Client Invite Email ---
+interface ClientInviteEmailPayload {
+  to: string;
+  clientName: string;
+  inviteLink: string;
+}
+
+function buildClientInviteBody(payload: ClientInviteEmailPayload): string {
+  const { clientName, inviteLink } = payload;
+  return [
+    `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111;">`,
+    `<h2 style="color: #111;">You're invited to access ${clientName}</h2>`,
+    `<p>Hello,</p>`,
+    `<p>You have been invited to access the client portal for <strong>${clientName}</strong>. `,
+    `Click the button below to create your account or sign in to accept the invite.</p>`,
+    `<p style="margin: 24px 0;">`,
+    `<a href="${inviteLink}" style="background:#00d9ff;color:#000;padding:12px 18px;text-decoration:none;font-weight:600;border-radius:8px;">Accept Invite</a>`,
+    `</p>`,
+    `<p>If the button doesn't work, copy and paste this link into your browser:</p>`,
+    `<p style="word-break: break-all;"><a href="${inviteLink}">${inviteLink}</a></p>`,
+    `<p style="margin-top:32px;color:#666;">If you did not expect this, you can ignore this email.</p>`,
+    `</div>`
+  ].join("");
+}
+
+export async function sendClientInviteEmail(payload: ClientInviteEmailPayload): Promise<void> {
+  if (!isEmailConfigured()) {
+    console.warn("Email is not configured. Client invite email not sent.");
+    return;
+  }
+
+  try {
+    const transport = getTransporter();
+    await transport.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: payload.to,
+      subject: `You're invited to ${payload.clientName} portal`,
+      html: buildClientInviteBody(payload),
+    });
+    console.log(`Client invite email sent to ${payload.to} for ${payload.clientName}`);
+  } catch (err) {
+    console.error("Failed to send client invite email:", err);
+  }
+}

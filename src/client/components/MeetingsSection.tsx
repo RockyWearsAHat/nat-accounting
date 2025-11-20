@@ -261,7 +261,7 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
                       <div className={styles.meetingActions}>
                         {upcoming && (meeting.videoUrl || meeting.zoomMeetingId) && (
                           <button
-                            className={styles.joinButton}
+                            className={`${styles.joinButton} btn btn--primary`}
                             onClick={() => handleJoinMeeting(meeting)}
                             title="Join meeting"
                           >
@@ -271,14 +271,14 @@ export const MeetingsSection: React.FC<MeetingsSectionProps> = ({ onMeetingUpdat
                         {upcoming && (
                           <>
                             <button
-                              className={styles.rescheduleButton}
+                              className={`${styles.rescheduleButton} btn btn--outline`}
                               onClick={() => handleReschedule(meeting)}
                               title="Reschedule meeting"
                             >
                               📅 Reschedule
                             </button>
                             <button
-                              className={styles.deleteButton}
+                              className={`${styles.deleteButton} btn btn--danger`}
                               onClick={() => handleDeleteMeeting(meeting.id)}
                               title="Cancel meeting"
                             >

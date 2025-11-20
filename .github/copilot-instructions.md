@@ -252,6 +252,7 @@ The site uses animated, blurred radial gradients in the background:
 - Settings cards with glassmorphism
 - Calendar chip styling with color pickers
 - Form elements with proper spacing and borders
+ - Calendar action overlay pattern: wrap calendar in `.calendarContainer` (relative) and place actionable buttons with `.calendarAction` (absolute top-right). Primary CTAs should use the sleeker `.btnPrimary` style matching NewHome.
 
 **ConsultationForm:**
 - Sectioned layout with clear headings
@@ -1062,6 +1063,32 @@ GridFS-based file storage system for client documents with strict access control
 - client.ts router (related client-facing endpoints)
 
 ---
+
+### Client Members Management (Jan 2025)
+
+**Purpose:**
+Allow admins to associate multiple users with a client, invite them via email, and revoke access.
+
+**Model:** `src/server/models/ClientMember.ts`
+- Fields: `clientId`, `email`, `role` (`admin|member`), `userId?`, `status` (`invited|active|revoked`), `invitedAt`, `invitedBy?`
+- Unique index on `(clientId, email)`
+
+**Routes:** `src/server/routes/clients.ts` (admin only)
+- `GET /api/clients/:id/members` → List members for a client
+- `POST /api/clients/:id/invite` → Invite by email `{ email, role }` (sends email, creates/updates membership)
+- `DELETE /api/clients/:id/members/:memberId` → Remove/revoke a member
+
+**Email:** `sendClientInviteEmail` in `src/server/services/MailService.ts`
+- Env: `SMTP_*`, `EMAIL_FROM`
+- Invite link: `/register?clientId=...&email=...` (prefill)
+
+**Frontend:** `src/client/components/ClientsManagement.tsx`
+- Adds “Manage Users” button per client (admin view)
+- Modal lists members, invite by email + role, and remove members
+- Uses global `btn` utilities for actions
+
+**Notes:**
+- MVP uses a simple invite link for registration prefill; future enhancement could add signed tokens and acceptance flow.
 
 ### DayEventsModal Component (`src/client/components/DayEventsModal.tsx`)
 
