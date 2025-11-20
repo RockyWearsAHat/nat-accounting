@@ -60,6 +60,7 @@ const NewHome: React.FC = () => {
   const heroRef = useRef<HTMLElement>(null);
   const servicesRef = useRef<HTMLElement>(null);
   const navbarRef = useRef<HTMLElement>(null);
+  const logoWrapperRef = useRef<HTMLDivElement>(null);
   const heroLogoRef = useRef<HTMLDivElement>(null);
   const heroTextRef = useRef<HTMLDivElement>(null);
   const illuminateRef = useRef<HTMLSpanElement>(null);
@@ -202,7 +203,16 @@ const NewHome: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!heroRef.current || !servicesRef.current || !heroTextRef.current || !heroLogoRef.current) return;
+    if (!heroRef.current || !servicesRef.current || !heroTextRef.current || !heroLogoRef.current || !logoWrapperRef.current) return;
+
+    // Pin the logo wrapper to match hero animation duration - use hero as trigger for perfect sync
+    ScrollTrigger.create({
+      trigger: heroRef.current,
+      start: 'top top',
+      end: '+=400%',
+      pin: logoWrapperRef.current,
+      pinSpacing: false
+    });
 
     // Set initial states for all elements to prevent flash
     gsap.set(heroLogoRef.current, {
@@ -255,7 +265,7 @@ const NewHome: React.FC = () => {
         trigger: heroRef.current,
         start: 'top top',
         end: '+=400%',            // 100vh for main animation
-        scrub: true,              // true = instant 1:1 scroll mapping (no delay)
+        scrub: 0,                 // 0 = instant 1:1 scroll mapping (no smoothing)
         pin: true,
         pinSpacing: true,
         anticipatePin: 0.5,
@@ -347,49 +357,49 @@ const NewHome: React.FC = () => {
     }, {
       y: 0,
       duration: 8,
-      ease: 'power1.out'
+      ease: 'none'
     }, 'formStart')  // Form lands first at formStart + 8
     .fromTo(nameInputRef.current, { 
       y: 'calc(120% + 16px)'
     }, { 
       y: 0,  // Aligns with form (no gap)
       duration: 8,
-      ease: 'power1.out'
+      ease: 'none'
     }, 'formStart+=0.5')  // Lands 0.5 scroll units after form
     .fromTo(emailInputRef.current, { 
       y: 'calc(120% + 32px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'power1.out'
+      ease: 'none'
     }, 'formStart+=1')  // Lands 1 scroll unit after form
     .fromTo(phoneInputRef.current, { 
       y: 'calc(120% + 48px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'power1.out'
+      ease: 'none'
     }, 'formStart+=1.5')
     .fromTo(companyInputRef.current, { 
       y: 'calc(120% + 64px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'power1.out'
+      ease: 'none'
     }, 'formStart+=2')
     .fromTo(messageInputRef.current, { 
       y: 'calc(120% + 80px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'power1.out'
+      ease: 'none'
     }, 'formStart+=2.5')
     .fromTo(buttonRef.current, { 
       y: 'calc(120% + 96px)'
     }, { 
       y: 0,
       duration: 8,
-      ease: 'power1.out'
+      ease: 'none'
     }, 'formStart+=3')  // Last element lands 3 scroll units after form
     // Hold aligned (no gaps) until unpin
     .to({}, { duration: 30 });
@@ -409,37 +419,37 @@ const NewHome: React.FC = () => {
       .to(formContainerRef.current, { 
         y: '-120%', 
         duration: 8, 
-        ease: 'power1.in' 
+        ease: 'none' 
       }, 0)  // Exits first at position 0
       .to(nameInputRef.current, { 
         y: 'calc(-120% - 8px)', 
         duration: 8, 
-        ease: 'power1.in' 
+        ease: 'none' 
       }, 0.5)  // Exits at position 0.5
       .to(emailInputRef.current, { 
         y: 'calc(-120% - 16px)', 
         duration: 8, 
-        ease: 'power1.in' 
+        ease: 'none' 
       }, 1)
       .to(phoneInputRef.current, { 
         y: 'calc(-120% - 24px)', 
         duration: 8, 
-        ease: 'power1.in' 
+        ease: 'none' 
       }, 1.5)
       .to(companyInputRef.current, { 
         y: 'calc(-120% - 32px)', 
         duration: 8, 
-        ease: 'power1.in' 
+        ease: 'none' 
       }, 2)
       .to(messageInputRef.current, { 
         y: 'calc(-120% - 40px)', 
         duration: 8, 
-        ease: 'power1.in' 
+        ease: 'none' 
       }, 2.5)
       .to(buttonRef.current, { 
         y: 'calc(-120% - 48px)', 
         duration: 8, 
-        ease: 'power1.in' 
+        ease: 'none' 
       }, 3);
 
     // Scroll-triggered animations for service cards - instant scroll mapping, staggered appearance
@@ -499,6 +509,10 @@ const NewHome: React.FC = () => {
       const heroRect = heroRef.current?.getBoundingClientRect();
       isInHeroSection = heroRect ? heroRect.bottom > window.innerHeight * 0.5 : false;
       
+      // Check form visibility - disable hint once form starts appearing
+      const formVisible = formContainerRef.current?.getBoundingClientRect().top !== undefined &&
+                         formContainerRef.current.getBoundingClientRect().top < window.innerHeight;
+      
       // Show "Scroll to explore" when returning to top
       if (currentScrollY === 0 && lastScrollY > 0 && scrollHintRef.current) {
         setScrollHintText('Scroll to explore');
@@ -513,13 +527,14 @@ const NewHome: React.FC = () => {
         inactivityTimerRef.current = null;
       }
       
-      // Only set new timer if we're in hero section and not at scroll position 0
-      // Don't interfere with the "Scroll to explore" hint at the top
-      if (isInHeroSection && window.scrollY > 50) {
+      // Only set new timer if: in hero section, not at top, AND form is not visible yet
+      if (isInHeroSection && window.scrollY > 50 && !formVisible) {
         inactivityTimerRef.current = window.setTimeout(() => {
           const timeSinceLastScroll = Date.now() - lastScrollTime;
-          // If 10+ seconds have passed and still in hero section
-          if (timeSinceLastScroll >= 10000 && isInHeroSection && scrollHintRef.current && window.scrollY > 50) {
+          // If 10+ seconds have passed and still in hero section (and form still not visible)
+          const stillNotVisible = formContainerRef.current?.getBoundingClientRect().top !== undefined &&
+                                 formContainerRef.current.getBoundingClientRect().top >= window.innerHeight;
+          if (timeSinceLastScroll >= 10000 && isInHeroSection && scrollHintRef.current && window.scrollY > 50 && stillNotVisible) {
             setScrollHintText('Scroll more to continue exploring');
             gsap.to(scrollHintRef.current, { 
               opacity: 1, 
@@ -638,13 +653,15 @@ const NewHome: React.FC = () => {
 
   return (
     <div className={styles.page}>
-      {/* Hero Section */}
-      <section ref={heroRef} className={styles.hero}>
-        {/* Logo watermark behind content - starts large and centered */}
+      {/* Logo watermark wrapper - pinned during hero animation to allow overflow onto navbar */}
+      <div ref={logoWrapperRef} className={styles.heroLogoWrapper}>
         <div ref={heroLogoRef} className={styles.heroLogoWatermark}>
           <NorthStarLogo size={700} color="rgba(174, 191, 190, 0.06)" />
         </div>
+      </div>
 
+      {/* Hero Section */}
+      <section ref={heroRef} className={styles.hero}>
         {/* Scroll hint - shows immediately and updates based on scroll position */}
         <div ref={scrollHintRef} className={styles.scrollHint}>
           <span className={styles.scrollHintText}>{scrollHintText}</span>
